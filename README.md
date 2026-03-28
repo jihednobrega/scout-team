@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scout Team
 
-## Getting Started
+Plataforma de scout e análise estatística para voleibol. Registra ações em vídeo, calcula métricas por fundamento e expõe portais mobile para atletas e comissão técnica.
 
-First, run the development server:
+## Stack
+
+- **Next.js 15** (App Router, Server Components)
+- **Chakra UI** — design system
+- **TypeScript**
+- **Prisma + SQLite** — banco local para o operador
+- **Turso** (libSQL) — banco cloud sincronizado para os portais
+
+## Funcionalidades
+
+- Scout por vídeo: registro de ações (ataque, saque, recepção, bloqueio, defesa, levantamento) por zona e resultado
+- Estatísticas por atleta e por partida: eficiência, positividade, heatmaps de coordenadas, radar chart
+- Portal do atleta: acesso mobile com stats pessoais, fundamentos e histórico de partidas
+- Portal do treinador: visão completa do elenco, métricas de equipe e análise individual
+- Sincronização local → cloud via botão "Publicar agora" em Configurações
+
+## Rodando localmente
 
 ```bash
+npm install
+npx prisma migrate dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Crie um arquivo `.env` na raiz:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+DATABASE_URL="file:./dev.db"
+TURSO_DATABASE_URL="libsql://..."   # opcional para dev
+TURSO_AUTH_TOKEN="..."              # opcional para dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Para o portal de acesso, crie `users.private.json` na raiz (ver `users.private.example.json` se existir).
 
-## Learn More
+## Deploy (Vercel)
 
-To learn more about Next.js, take a look at the following resources:
+Variáveis de ambiente necessárias:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | `file:./dev.db` (usado só no build para o `prisma generate`) |
+| `TURSO_DATABASE_URL` | URL do banco Turso |
+| `TURSO_AUTH_TOKEN` | Token de autenticação Turso |
+| `PORTAL_USERS` | JSON com os usuários do portal (conteúdo de `users.private.json`) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Antes do primeiro acesso em produção, acesse Configurações e clique em **Publicar agora** para sincronizar os dados locais com o Turso.

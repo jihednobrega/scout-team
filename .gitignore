@@ -12,6 +12,11 @@
 
 # testing
 /coverage
+/e2e/
+/playwright-report/
+/test-results/
+playwright.config.ts
+playwright.*.config.ts
 
 # next.js
 /.next/
@@ -39,3 +44,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+
+# Documentação interna e configuração local (não commitar)
+/docs/
+/.claude/
+
+# Portal users (não commitar — contém códigos de acesso)
+users.private.json
+
+# SQLite local (não commitar — banco de dados privado)
+dev.db
+dev.db-shm
+dev.db-wal
+dev.db-info
+prisma/dev.db

@@ -1,0 +1,191 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Nota: em produção, o adapter libsql é configurado via src/lib/prisma.ts
+// O provider "sqlite" é mantido para compatibilidade com `prisma migrate dev`
+
+// Modelo de Equipe
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  logo      String?  // URL ou base64 da logo
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  players Player[]
+  matches Match[]
+  preferences UserPreference[]
+  playerPresets PlayerPreset[]
+
+  @@map("teams")
+}
+
+// Modelo de Jogador
+model Player {
+  id                 String   @id @default(uuid())
+  teamId             String
+  name               String
+  jerseyNumber       Int
+  position           String   // ponteiro, oposto, central, levantador, libero
+  secondaryPositions String   @default("[]") // JSON string com posicoes secundárias
+  photo              String   // base64 ou URL
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relacionamentos
+  team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actions ScoutAction[]
+
+  @@unique([teamId, jerseyNumber]) // Não pode ter número duplicado na mesma equipe
+  @@map("players")
+}
+
+// Modelo de Partida
+model Match {
+  id          String   @id @default(uuid())
+  teamId      String
+  opponent    String
+  homeTeam    String
+  awayTeam    String
+  tournament  String?
+  location    String?
+  date        DateTime
+  result      String   // vitoria, derrota, em_andamento
+  finalScore  String   // "3 x 1"
+  status      String   @default("in_progress") // "in_progress" | "finalized"
+  sets        String   // JSON com informações dos sets
+  stats       String?  // JSON com estatísticas
+  duration    Int?     // duração em minutos
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relacionamentos
+  team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actions ScoutAction[]
+
+  @@map("matches")
+}
+
+// Modelo de Ação de Scout
+model ScoutAction {
+  id          String   @id @default(uuid())
+  matchId     String
+  playerId    String?  // null para ações do adversário (opponent_error, etc)
+  time        String   // horário da ação (ex: "12:35")
+  action      String   // serve, attack, block, dig, set, reception
+  subAction   String   // ace, kill, error, etc
+  zone        Int      // 1-6
+  coordinateX Float    // coordenada X (%)
+  coordinateY Float    // coordenada Y (%)
+  setNumber      Int      // número do set
+  timestamp      DateTime
+  videoTimestamp  String?  // MM:SS do vídeo (ex: "12:30")
+  efficiencyValue Float?   // -1.0 a +1.0, computado server-side
+  phase           String?  // 'sideout' | 'transition'
+  rallyId         String?  // ID do rally a que pertence
+  fullData        String?  // JSON com objeto completo da ação
+  createdAt      DateTime @default(now())
+
+  // Relacionamentos
+  match  Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+
+  @@map("scout_actions")
+}
+
+// Modelo de Configuração de Jogo
+model GameConfig {
+  id           String   @id @default(uuid())
+  gameId       String   @unique
+  teamId       String
+  date         DateTime
+  time         String
+  opponentId   String?
+  opponentName String
+  tournament   String?
+  location     String?
+  matchType    String   // friendly, championship, training
+
+  // Escalação (JSON)
+  lineup       String   // Array de LineupPlayer
+  liberoId     String
+  rotationStart String  // Array [1,2,3,4,5,6]
+
+  // Modelo de scout
+  modelId      String
+  modelName    String
+  customWeights String? // JSON Record<string, number>
+
+  // Campos avançados (JSON)
+  advanced     String   // AdvancedTracking
+
+  // Metadados
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("game_configs")
+}
+
+// Modelo de Adversário
+model Opponent {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  abbreviation String?
+  logo         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("opponents")
+}
+
+// Modelo de Modelo de Scout
+model ScoutModelSchema {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String
+  fundamentals String   // JSON com {serve, pass, attack, block, dig, set}
+  customWeights String? // JSON com pesos customizados
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("scout_models")
+}
+
+// Preset de seleção de atletas
+model PlayerPreset {
+  id        String   @id @default(uuid())
+  name      String
+  teamId    String
+  playerIds String   // JSON array de player IDs
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, name])
+  @@map("player_presets")
+}
+
+// Preferências por dispositivo (sem autenticação)
+model UserPreference {
+  id              String   @id @default(uuid())
+  deviceId        String   @unique
+  selectedTeamId  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relacionamentos
+  selectedTeam    Team?    @relation(fields: [selectedTeamId], references: [id], onDelete: SetNull)
+
+  @@map("user_preferences")
+}

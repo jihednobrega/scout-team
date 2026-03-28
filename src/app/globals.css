@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   --background: #ffffff;
@@ -19,8 +19,317 @@
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #1a1a2e;
+  color: white;
+  overflow-x: hidden;
+}
+
+/* Estilos da quadra */
+.volleyball-court {
+  background: linear-gradient(
+    to right,
+    #ea580c 0%,
+    #ea580c 50%,
+    #1e40af 50%,
+    #1e40af 100%
+  );
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Área de ataque (1/3 da quadra de cada lado) */
+.volleyball-court::before,
+.volleyball-court::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16.67%; /* 1/3 de cada metade = 1/6 do total */
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Área de ataque esquerda (time adversário) - tom mais escuro */
+.volleyball-court::before {
+  left: 0;
+  background: linear-gradient(
+    to right,
+    rgba(234, 88, 12, 0.3) 0%,
+    rgba(234, 88, 12, 0) 100%
+  );
+}
+
+/* Área de ataque direita (seu time) - tom mais escuro */
+.volleyball-court::after {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    rgba(30, 64, 175, 0.3) 0%,
+    rgba(30, 64, 175, 0) 100%
+  );
+}
+
+.court-line {
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Estilos dos botões de ação - IGUAIS AO ARTIFACT */
+.action-btn {
+  padding: 14px 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+  font-size: 13px;
+  text-align: center;
+  color: white;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn.selected {
+  background: #fff !important;
+  color: #333 !important;
+  transform: scale(1.05);
+}
+
+/* Cores específicas dos botões principais */
+.serve-btn {
+  background: #e74c3c;
+}
+.attack-btn {
+  background: #f39c12;
+}
+.block-btn {
+  background: #9b59b6;
+}
+.dig-btn {
+  background: #27ae60;
+}
+.set-btn {
+  background: #3498db;
+}
+.reception-btn {
+  background: #95a5a6;
+}
+
+/* Estilos dos sub-botões - IGUAIS AO ARTIFACT */
+.sub-action-btn {
+  padding: 12px 10px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+  font-size: 13px;
+  text-align: center;
+  color: white;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sub-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.sub-action-btn.selected {
+  background: #fff !important;
+  color: #333 !important;
+  transform: scale(1.05);
+}
+
+/* Cores específicas para sub-ações - IGUAIS AO ARTIFACT */
+.serve-ace {
+  background: #27ae60;
+}
+.serve-effective {
+  background: #f39c12;
+}
+.serve-error {
+  background: #e74c3c;
+}
+
+.attack-kill {
+  background: #27ae60;
+}
+.attack-effective {
+  background: #f39c12;
+}
+.attack-blocked {
+  background: #e67e22;
+}
+.attack-error {
+  background: #e74c3c;
+}
+
+.block-point {
+  background: #27ae60;
+}
+.block-effective {
+  background: #f39c12;
+}
+.block-touch {
+  background: #3498db;
+}
+
+.dig-excellent {
+  background: #27ae60;
+}
+.dig-good {
+  background: #f39c12;
+}
+.dig-error {
+  background: #e74c3c;
+}
+
+.set-excellent {
+  background: #27ae60;
+}
+.set-good {
+  background: #f39c12;
+}
+.set-error {
+  background: #e74c3c;
+}
+
+.reception-excellent {
+  background: #27ae60;
+}
+.reception-good {
+  background: #f39c12;
+}
+.reception-error {
+  background: #e74c3c;
+}
+
+/* Outros estilos */
+.click-indicator {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #e74c3c;
+  border: 2px solid white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse 1s ease-out;
+  z-index: 10;
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateX(-50%) translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.back-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.4); }
+}
+
+.pulse-live {
+  animation: pulse-live 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-serve {
+  0%, 100% { box-shadow: 0 0 10px rgba(72, 187, 120, 0.6); }
+  50% { box-shadow: 0 0 22px rgba(72, 187, 120, 1); }
+}
+
+.pulse-serve {
+  animation: pulse-serve 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-expected {
+  0%, 100% { box-shadow: 0 0 6px rgba(100, 150, 255, 0.3); }
+  50% { box-shadow: 0 0 14px rgba(100, 150, 255, 0.6); }
+}
+
+.pulse-expected {
+  animation: pulse-expected 1.8s ease-in-out infinite;
+}
+
+/* Drawer animations */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-slide-in {
+  animation: slideInRight 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.drawer-overlay {
+  animation: fadeIn 0.15s ease-in-out;
 }
