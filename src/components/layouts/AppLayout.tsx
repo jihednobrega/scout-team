@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import { Box, Container } from '@chakra-ui/react'
 import Sidebar from '../dashboard/Sidebar'
 import Header from '../dashboard/Header'
@@ -31,7 +32,13 @@ export default function AppLayout({
   children,
   maxWidth = '1400px'
 }: AppLayoutProps) {
+  const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // Portal tem layout próprio — renderiza children direto
+  if (pathname.startsWith('/portal')) {
+    return <>{children}</>
+  }
 
   return (
     <Box
