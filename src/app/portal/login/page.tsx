@@ -71,24 +71,25 @@ export default function PortalLoginPage() {
 
         {/* Logo / título */}
         <VStack spacing={2} mb={10} align="center">
-          <Flex
-            w="56px"
-            h="56px"
+          <Box
+            w="64px"
+            h="64px"
             borderRadius="16px"
-            bg="whiteAlpha.100"
-            border="1px solid"
-            borderColor="whiteAlpha.200"
-            align="center"
-            justify="center"
+            overflow="hidden"
             mb={1}
           >
-            <Icon as={IoShieldCheckmarkOutline} color="white" boxSize={7} />
-          </Flex>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icons/logo.svg"
+              alt="Scout Center"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+          </Box>
           <Text color="white" fontSize="xl" fontWeight="800" letterSpacing="-0.02em">
-            Portal
+            Scout Center
           </Text>
           <Text color="gray.500" fontSize="sm" textAlign="center">
-            Digite seu código de acesso
+            Para começar, digite seu código de acesso
           </Text>
         </VStack>
 
