@@ -4,6 +4,12 @@ import type { NextRequest } from 'next/server'
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Em produção: redireciona rotas do operador para o portal
+  // (operador usa apenas local — em prod só o portal funciona)
+  if (process.env.NODE_ENV === 'production' && !pathname.startsWith('/portal') && !pathname.startsWith('/api/portal')) {
+    return NextResponse.redirect(new URL('/portal/login', request.url))
+  }
+
   // Deixa passar: login e APIs do portal
   if (
     pathname === '/portal/login' ||
@@ -34,5 +40,10 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/portal/:path*'],
+  matcher: [
+    // Rotas do portal (auth)
+    '/portal/:path*',
+    // Em produção: captura todas as rotas para redirecionar operador → portal
+    '/((?!_next|favicon|icons|api/(?!portal)).*)',
+  ],
 }
