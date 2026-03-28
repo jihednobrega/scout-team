@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  serverExternalPackages: ['@libsql/client', '@libsql/hrana-client', '@prisma/adapter-libsql'],
 };
 
 export default nextConfig;
