@@ -13,6 +13,8 @@ import {
   Spinner,
 } from '@chakra-ui/react'
 import { useMatchDetail } from '@/hooks/useMatchesAPI'
+import { useTeamContext } from '@/contexts/TeamContext'
+import AIInsightCard from '@/components/ai/AIInsightCard'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,7 @@ export default function MatchDetailPage() {
   const router = useRouter()
   const params = useParams()
   const matchId = params?.id as string
+  const { selectedTeamId } = useTeamContext()
 
   const { match, loading } = useMatchDetail(matchId || null)
 
@@ -67,9 +70,10 @@ export default function MatchDetailPage() {
     if (!match || match.actions.length === 0) return null
     const a = match.actions
 
+    const KILL_SUBS = ['kill', 'tip', 'block_out']
     const atk = {
       total: a.filter(x => x.action === 'attack').length,
-      kills: a.filter(x => x.action === 'attack' && x.subAction === 'kill').length,
+      kills: a.filter(x => x.action === 'attack' && KILL_SUBS.includes(x.subAction)).length,
       errors: a.filter(x => x.action === 'attack' && x.subAction === 'error').length,
       blocked: a.filter(x => x.action === 'attack' && x.subAction === 'blocked').length,
     }
@@ -108,7 +112,7 @@ export default function MatchDetailPage() {
     const bySet = setsNumbers.map(setNum => ({
       set: setNum,
       actions: a.filter(x => x.set === setNum).length,
-      kills: a.filter(x => x.set === setNum && x.action === 'attack' && x.subAction === 'kill').length,
+      kills: a.filter(x => x.set === setNum && x.action === 'attack' && KILL_SUBS.includes(x.subAction)).length,
       errors: a.filter(x => x.set === setNum && (x.subAction === 'error')).length,
     }))
 
@@ -356,6 +360,18 @@ export default function MatchDetailPage() {
         </Flex>
 
       </Flex>
+
+      {/* ── Resumo IA ── */}
+      {selectedTeamId && (
+        <Box mb={4}>
+          <AIInsightCard
+            type="match_summary"
+            teamId={selectedTeamId}
+            matchId={matchId}
+            accent="#8B5CF6"
+          />
+        </Box>
+      )}
 
       {/* ── Sets: visualização por barras ── */}
       {match.sets.length > 0 && (

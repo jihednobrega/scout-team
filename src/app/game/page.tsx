@@ -19,9 +19,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
-  Select,
   useToast,
-  Switch,
   Tooltip,
   Popover,
   PopoverTrigger,
@@ -30,6 +28,7 @@ import {
   PopoverArrow,
 } from '@chakra-ui/react'
 import VolleyballCourt from '@/components/court/VolleyballCourt'
+import ActionPanel from '@/components/court/ActionPanel'
 import GameStepper from '@/components/game/GameStepper'
 import RallyFlow from '@/components/court/RallyFlow'
 import LineupModal from '@/components/court/LineupModal'
@@ -51,7 +50,8 @@ import {
   GameConfig,
   CourtPositions,
   PointRecord,
-  ScoutAction
+  ScoutAction,
+  ServeType,
 } from '@/types/scout'
 import { SetInfo } from '@/types/game'
 import { useTeamContext } from '@/contexts/TeamContext'
@@ -73,11 +73,11 @@ export default function ScoutPage() {
   ])
   
   const [form, setForm] = useState({
-    opponent: 'Aliança B',
+    opponent: '',
     event: '',
     location: '',
     sets: '5',
-    date: '2023-10-01',
+    date: new Date().toISOString().split('T')[0],
     time: '20:00',
   })
   const [formError, setFormError] = useState('')
@@ -235,9 +235,6 @@ export default function ScoutPage() {
           minW="280px"
         >
           <Text flex="1" fontSize="sm">
-            {lastRegisteredAction.videoTimestamp && (
-              <Text as="span" color="blue.300" mr={1}>[{lastRegisteredAction.videoTimestamp}]</Text>
-            )}
             {playerLabel} — {actionLabel}
           </Text>
           <Button
@@ -290,34 +287,6 @@ export default function ScoutPage() {
     }
   }, [undoLastAction, players, toast])
 
-  // Estado do timestamp de vídeo
-  const [videoTimestamp, setVideoTimestamp] = useState('')
-  const timestampInputRef = useRef<HTMLInputElement>(null)
-
-  // Auto-formatar timestamp: "1230" → "12:30"
-  const handleTimestampChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let raw = e.target.value.replace(/[^0-9:]/g, '')
-    // Se digitou só números e tem 3+ chars, inserir ":"
-    if (!raw.includes(':') && raw.length >= 3) {
-      raw = raw.slice(0, -2) + ':' + raw.slice(-2)
-    }
-    // Limitar formato MM:SS ou HH:MM:SS
-    if (raw.length > 8) raw = raw.slice(0, 8)
-    setVideoTimestamp(raw)
-  }
-
-  const handleTimestampKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      timestampInputRef.current?.blur()
-    }
-  }
-
-  const handleFocusTimestamp = useCallback(() => {
-    timestampInputRef.current?.focus()
-    timestampInputRef.current?.select()
-  }, [])
-
   // Finalizar set: salvar placar, avançar set, resetar placar
   const handleEndSet = useCallback(() => {
     const setInfo: SetInfo = {
@@ -337,11 +306,10 @@ export default function ScoutPage() {
     setCurrentSet(currentSet + 1)
     setScore({ home: 0, away: 0 })
 
-    // Limpar posições em quadra e abrir modal de configuração do próximo set
+    // Limpar posições em quadra — overlay da quadra guia para o próximo set
     setCourtPositions({ 1: null, 2: null, 3: null, 4: null, 5: null, 6: null })
     setGameStarted(false)
     setIsLineupPhase(false)
-    setIsStartDialogOpen(true)
 
     setIsEndSetDialogOpen(false)
 
@@ -443,10 +411,6 @@ export default function ScoutPage() {
     }))
     setIsStartDialogOpen(false)
     setIsLineupPhase(true)
-    // Em transições entre sets, abrir LineupModal automaticamente para posicionar atletas
-    if (setsHistory.length > 0) {
-      setShowLineupModal(true)
-    }
   }
 
   // Etapa 2: Escalação completa → iniciar scout
@@ -820,6 +784,52 @@ export default function ScoutPage() {
     }
   }
 
+  // ── Painel direito persistente (ActionPanel inline) ──
+  const [sidebarSelectedPlayer, setSidebarSelectedPlayer] = useState<string | null>(null)
+  const [sidebarFundamento, setSidebarFundamento] = useState<string>('serve')
+  const [sidebarFilteredFundamentos, setSidebarFilteredFundamentos] = useState<string[] | undefined>(undefined)
+  const [sidebarServeType, setSidebarServeType] = useState<ServeType>('float')
+  const [sidebarPendingZone, setSidebarPendingZone] = useState<{ action: string } | null>(null)
+  const courtActionRef = useRef<((action: string, subAction: string, zone?: number, serveType?: ServeType) => void) | null>(null)
+
+  const handleSidebarPlayerSelected = useCallback((
+    jersey: string | null, fundamentos: string[] | undefined, fundamento: string
+  ) => {
+    setSidebarSelectedPlayer(jersey)
+    setSidebarPendingZone(null)
+    if (jersey !== null) {
+      setSidebarFilteredFundamentos(fundamentos)
+      setSidebarFundamento(fundamento)
+    }
+  }, [])
+
+  const handleSidebarFundamentoChange = useCallback((f: string) => {
+    setSidebarFundamento(f)
+  }, [])
+
+  const handleSidebarPendingZoneChange = useCallback((isPending: boolean, actionName?: string) => {
+    setSidebarPendingZone(isPending && actionName ? { action: actionName } : null)
+  }, [])
+
+  const handleSidebarActionComplete = useCallback((
+    action: string, subAction: string, zone?: number, serveType?: ServeType
+  ) => {
+    courtActionRef.current?.(action, subAction, zone, serveType)
+  }, [])
+
+  const handlePageOpponentError = useCallback(() => {
+    registerAction({
+      id: `action-${Date.now()}`,
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      player: '0',
+      action: 'opponent_error',
+      subAction: 'error',
+      zone: 0,
+      coordinates: { x: 0, y: 0 },
+      timestamp: new Date(),
+    })
+  }, [registerAction])
+
   const homeTeamName = gameConfig?.teamName || selectedTeam?.name || 'Seu Time'
   const opponentName = gameConfig?.opponentName || form.opponent || 'Adversário'
   const tournamentName = gameConfig?.tournament || form.event || 'Campeonato'
@@ -892,551 +902,621 @@ export default function ScoutPage() {
     >
       {step === 1 && (
         <>
-          <GameStepper currentStep={1} />
-
-          {/* Card de retomada de partida em andamento */}
-          {resumeData && (
-            <Box
-              bg="gray.800"
-              borderRadius="xl"
-              p={5}
-              borderWidth="2px"
-              borderColor="green.600"
-              mb={6}
-              maxW="420px"
-              mx="auto"
-            >
-              <Flex align="center" gap={2} mb={3}>
-                <Box w="8px" h="8px" borderRadius="full" bg="green.400" className="pulse-live" />
-                <Text color="green.300" fontWeight="bold" fontSize="sm">
-                  Partida em andamento
-                </Text>
-              </Flex>
-              <Text color="white" fontWeight="bold" fontSize="lg" mb={1}>
-                vs {(() => {
-                  try {
-                    const cfg = JSON.parse(localStorage.getItem('current-game-config') || '{}')
-                    return cfg.opponentName || 'Adversário'
-                  } catch { return 'Adversário' }
-                })()}
-              </Text>
-              <Flex gap={4} mb={3}>
-                <Box>
-                  <Text color="gray.400" fontSize="xs">Set</Text>
-                  <Text color="white" fontWeight="bold">
-                    {(resumeData.setsHistory?.length || 0) + 1}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text color="gray.400" fontSize="xs">Sets</Text>
-                  <Text color="white" fontWeight="bold">
-                    {resumeData.setsHistory?.filter(s => s.homeScore > s.awayScore).length || 0}
-                    {' x '}
-                    {resumeData.setsHistory?.filter(s => s.awayScore > s.homeScore).length || 0}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text color="gray.400" fontSize="xs">Salvo em</Text>
-                  <Text color="white" fontWeight="bold" fontSize="sm">
-                    {new Date(resumeData.savedAt).toLocaleString('pt-BR', {
-                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </Text>
-                </Box>
-              </Flex>
-              <Flex gap={3}>
-                <Button
-                  colorScheme="green"
-                  flex={1}
-                  onClick={handleResume}
-                >
-                  Continuar
-                </Button>
-                <Button
-                  variant="ghost"
-                  color="red.400"
-                  _hover={{ bg: 'red.900', color: 'red.300' }}
-                  onClick={handleDiscardSession}
-                >
-                  Descartar
-                </Button>
-              </Flex>
-            </Box>
-          )}
-
-          <Box
-            bg="gray.800"
-            borderRadius="xl"
-            p={5}
-            borderWidth="2px"
-            borderColor="blue.700"
-            mb={6}
-            maxW="420px"
-            mx="auto"
+          {/* Topbar de navegação */}
+          <Flex
+            px={6} py={3}
+            align="center"
+            borderBottomWidth="1px"
+            borderBottomColor="gray.800"
+            mb={8}
           >
-          <Flex mb={3} align="center">
             <Button
               variant="ghost"
               size="sm"
               color="gray.500"
-              _hover={{ color: 'gray.200' }}
+              _hover={{ color: 'gray.200', bg: 'gray.800' }}
               onClick={() => router.push('/dashboard')}
-              px={1}
               fontWeight="normal"
             >
               ← Dashboard
             </Button>
+            <Box flex="1" display="flex" justifyContent="center">
+              <GameStepper currentStep={1} />
+            </Box>
           </Flex>
-          <Heading size="md" color="blue.300" mb={2}>
-            Nova Partida
-          </Heading>
-          <Box mb={3}>
-            <Text fontSize="sm" color="gray.200" mb={1}>
-              Equipe adversária *
-            </Text>
-            <Input
-              name="opponent"
-              value={form.opponent}
-              onChange={handleFormChange}
-              placeholder="Ex: Vôlei Clube"
-              bg="gray.900"
-              color="white"
-              mb={2}
-            />
-            <Text fontSize="sm" color="gray.200" mb={1}>
-              Evento/Campeonato <Text as="span" color="gray.500" fontSize="xs">(opcional)</Text>
-            </Text>
-            <Input
-              name="event"
-              value={form.event}
-              onChange={handleFormChange}
-              placeholder="Ex: Copa Regional"
-              bg="gray.900"
-              color="white"
-              mb={2}
-            />
-            <Text fontSize="sm" color="gray.200" mb={1}>
-              Local <Text as="span" color="gray.500" fontSize="xs">(opcional)</Text>
-            </Text>
-            <Input
-              name="location"
-              value={form.location}
-              onChange={handleFormChange}
-              placeholder="Ex: Ginásio Municipal"
-              bg="gray.900"
-              color="white"
-              mb={2}
-            />
-            <Text fontSize="sm" color="gray.200" mb={1}>
-              Quantidade de sets *
-            </Text>
-            <Flex gap={2} flexWrap="wrap" mb={2}>
-              {(['3', '5', 'custom'] as const).map((val) => {
-                const label =
-                  val === '3' ? 'Melhor de 3' : val === '5' ? 'Melhor de 5' : 'Personalizado'
-                const isSelected = form.sets === val
-                return (
-                  <Button
-                    key={val}
-                    size="sm"
-                    onClick={() => handleSetsChange(val)}
-                    bg={isSelected ? 'blue.600' : 'gray.700'}
-                    color={isSelected ? 'white' : 'gray.400'}
-                    borderWidth="1px"
-                    borderColor={isSelected ? 'blue.400' : 'gray.600'}
-                    _hover={{ bg: isSelected ? 'blue.500' : 'gray.600' }}
-                    fontWeight={isSelected ? 'bold' : 'normal'}
-                    transition="all 0.15s"
-                  >
-                    {label}
-                  </Button>
-                )
-              })}
-              {form.sets === 'custom' && (
-                <Input
-                  name="customSets"
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={customSets}
-                  onChange={handleCustomSetsChange}
-                  placeholder="Nº"
-                  w="60px"
-                  bg="gray.900"
-                  color="white"
-                  size="sm"
-                />
-              )}
-            </Flex>
-            <Flex gap={2} mb={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color="gray.200" mb={1}>
-                  Data *
-                </Text>
-                <Input
-                  name="date"
-                  type="date"
-                  value={form.date}
-                  onChange={handleFormChange}
-                  bg="gray.900"
-                  color="white"
-                />
-              </Box>
-              <Box flex={1}>
-                <Text fontSize="sm" color="gray.200" mb={1}>
-                  Hora *
-                </Text>
-                <Input
-                  name="time"
-                  type="time"
-                  value={form.time}
-                  onChange={handleFormChange}
-                  bg="gray.900"
-                  color="white"
-                />
-              </Box>
-            </Flex>
-            {/* Fundamentos a registrar */}
-            <Text fontSize="sm" color="gray.200" mb={1} mt={2}>
-              Fundamentos a registrar
-            </Text>
-            <Flex gap={2} flexWrap="wrap" mb={2}>
-              {([
-                { key: 'serve', label: 'Saque', required: true },
-                { key: 'reception', label: 'Recepção', required: true },
-                { key: 'attack', label: 'Ataque', required: true },
-                { key: 'block', label: 'Bloqueio', required: false },
-                { key: 'dig', label: 'Defesa', required: false },
-                { key: 'set', label: 'Levantamento', required: false },
-              ] as const).map((fund) => {
-                const isActive = enabledFundamentos.includes(fund.key)
-                const pill = (
-                  <Box
-                    key={fund.key}
-                    as="button"
-                    px={3}
-                    py={1}
-                    borderRadius="full"
-                    fontSize="xs"
-                    fontWeight="medium"
-                    bg={isActive ? 'green.800' : 'gray.700'}
-                    color={isActive ? 'green.200' : 'gray.500'}
-                    borderWidth="1px"
-                    borderColor={isActive ? 'green.600' : 'gray.600'}
-                    cursor={fund.required ? 'not-allowed' : 'pointer'}
-                    opacity={fund.required ? 0.7 : 1}
-                    onClick={() => {
-                      if (fund.required) return
-                      setEnabledFundamentos((prev) =>
-                        prev.includes(fund.key)
-                          ? prev.filter((f) => f !== fund.key)
-                          : [...prev, fund.key]
-                      )
-                    }}
-                    transition="all 0.15s"
-                  >
-                    {fund.label}{fund.required ? ' 🔒' : ''}
+
+          <Box maxW="860px" mx="auto" px={6} pb={12}>
+            {/* Banner de retomada — proeminente quando há sessão */}
+            {resumeData && (
+              <Box
+                mb={6}
+                borderRadius="xl"
+                borderWidth="1px"
+                borderColor="green.700"
+                bg="green.950"
+                overflow="hidden"
+              >
+                <Flex px={5} py={3} align="center" gap={3} borderBottomWidth="1px" borderBottomColor="green.800/50">
+                  <Box w="8px" h="8px" borderRadius="full" bg="green.400" flexShrink={0} className="pulse-live" />
+                  <Text color="green.300" fontWeight="bold" fontSize="sm">Partida em andamento</Text>
+                </Flex>
+                <Flex px={5} py={4} align="center" gap={6}>
+                  <Box flex="1">
+                    <Text color="gray.400" fontSize="xs" mb={0.5}>Adversário</Text>
+                    <Text color="white" fontWeight="bold" fontSize="lg">
+                      {(() => {
+                        try {
+                          const cfg = JSON.parse(localStorage.getItem('current-game-config') || '{}')
+                          return cfg.opponentName || 'Adversário'
+                        } catch { return 'Adversário' }
+                      })()}
+                    </Text>
                   </Box>
-                )
-                return fund.required ? (
-                  <Tooltip
-                    key={fund.key}
-                    label="Obrigatório — não pode ser desativado"
-                    fontSize="xs"
-                    placement="top"
-                    hasArrow
-                  >
-                    {pill}
-                  </Tooltip>
-                ) : pill
-              })}
-            </Flex>
-            <Text fontSize="xs" color="gray.500" mb={2}>
-              Se estiver começando, mantenha Saque, Recepção e Ataque. Ative os demais quando se sentir confiante.
-            </Text>
-            {formError && (
-              <Text color="red.300" fontSize="sm">
-                {formError}
-              </Text>
+                  <Flex gap={6}>
+                    <Box textAlign="center">
+                      <Text color="gray.500" fontSize="xs">Set atual</Text>
+                      <Text color="white" fontWeight="bold" fontSize="xl">{(resumeData.setsHistory?.length || 0) + 1}</Text>
+                    </Box>
+                    <Box textAlign="center">
+                      <Text color="gray.500" fontSize="xs">Placar</Text>
+                      <Text color="white" fontWeight="bold" fontSize="xl">
+                        {resumeData.setsHistory?.filter(s => s.homeScore > s.awayScore).length || 0}
+                        {' × '}
+                        {resumeData.setsHistory?.filter(s => s.awayScore > s.homeScore).length || 0}
+                      </Text>
+                    </Box>
+                    <Box textAlign="center">
+                      <Text color="gray.500" fontSize="xs">Salvo</Text>
+                      <Text color="white" fontWeight="bold" fontSize="sm">
+                        {new Date(resumeData.savedAt).toLocaleString('pt-BR', {
+                          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </Text>
+                    </Box>
+                  </Flex>
+                  <Flex gap={2} flexShrink={0}>
+                    <Button colorScheme="green" size="sm" onClick={handleResume} fontWeight="bold">
+                      Continuar partida
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm" color="gray.500"
+                      _hover={{ color: 'red.300', bg: 'red.950' }}
+                      onClick={handleDiscardSession}
+                    >
+                      Descartar
+                    </Button>
+                  </Flex>
+                </Flex>
+              </Box>
             )}
+
+            {/* Título da seção */}
+            <Box mb={6}>
+              <Heading size="lg" color="white" fontWeight="bold">Nova Partida</Heading>
+              <Text color="gray.500" fontSize="sm" mt={1}>Configure os dados da partida antes de montar a escalação.</Text>
+            </Box>
+
+            {/* Formulário em 2 colunas */}
+            <Flex gap={6} align="flex-start">
+              {/* Coluna esquerda: dados da partida */}
+              <Box flex="1">
+                <Text fontSize="xs" color="blue.400" fontWeight="bold" textTransform="uppercase" letterSpacing="wider" mb={4}>
+                  Dados da Partida
+                </Text>
+
+                <Box mb={4}>
+                  <Text fontSize="sm" color="gray.300" mb={1.5} fontWeight="medium">
+                    Equipe adversária <Text as="span" color="red.400">*</Text>
+                  </Text>
+                  <Input
+                    name="opponent"
+                    value={form.opponent}
+                    onChange={handleFormChange}
+                    placeholder="Ex: Vôlei Clube"
+                    bg="gray.900"
+                    color="white"
+                    borderColor="gray.700"
+                    _focus={{ borderColor: 'blue.500', boxShadow: '0 0 0 1px #3182ce' }}
+                    _placeholder={{ color: 'gray.600' }}
+                    size="md"
+                  />
+                </Box>
+
+                <Box mb={4}>
+                  <Text fontSize="sm" color="gray.300" mb={1.5} fontWeight="medium">
+                    Evento / Campeonato <Text as="span" color="gray.600" fontSize="xs" fontWeight="normal">(opcional)</Text>
+                  </Text>
+                  <Input
+                    name="event"
+                    value={form.event}
+                    onChange={handleFormChange}
+                    placeholder="Ex: Copa Regional 2025"
+                    bg="gray.900"
+                    color="white"
+                    borderColor="gray.700"
+                    _focus={{ borderColor: 'blue.500', boxShadow: '0 0 0 1px #3182ce' }}
+                    _placeholder={{ color: 'gray.600' }}
+                  />
+                </Box>
+
+                <Box mb={4}>
+                  <Text fontSize="sm" color="gray.300" mb={1.5} fontWeight="medium">
+                    Local <Text as="span" color="gray.600" fontSize="xs" fontWeight="normal">(opcional)</Text>
+                  </Text>
+                  <Input
+                    name="location"
+                    value={form.location}
+                    onChange={handleFormChange}
+                    placeholder="Ex: Ginásio Municipal"
+                    bg="gray.900"
+                    color="white"
+                    borderColor="gray.700"
+                    _focus={{ borderColor: 'blue.500', boxShadow: '0 0 0 1px #3182ce' }}
+                    _placeholder={{ color: 'gray.600' }}
+                  />
+                </Box>
+
+                <Flex gap={3}>
+                  <Box flex="1">
+                    <Text fontSize="sm" color="gray.300" mb={1.5} fontWeight="medium">
+                      Data <Text as="span" color="red.400">*</Text>
+                    </Text>
+                    <Input
+                      name="date"
+                      type="date"
+                      value={form.date}
+                      onChange={handleFormChange}
+                      bg="gray.900"
+                      color="white"
+                      borderColor="gray.700"
+                      _focus={{ borderColor: 'blue.500', boxShadow: '0 0 0 1px #3182ce' }}
+                    />
+                  </Box>
+                  <Box flex="1">
+                    <Text fontSize="sm" color="gray.300" mb={1.5} fontWeight="medium">
+                      Hora <Text as="span" color="red.400">*</Text>
+                    </Text>
+                    <Input
+                      name="time"
+                      type="time"
+                      value={form.time}
+                      onChange={handleFormChange}
+                      bg="gray.900"
+                      color="white"
+                      borderColor="gray.700"
+                      _focus={{ borderColor: 'blue.500', boxShadow: '0 0 0 1px #3182ce' }}
+                    />
+                  </Box>
+                </Flex>
+              </Box>
+
+              {/* Separador vertical */}
+              <Box w="1px" bg="gray.800" alignSelf="stretch" flexShrink={0} />
+
+              {/* Coluna direita: formato + fundamentos */}
+              <Box w="340px" flexShrink={0}>
+                <Text fontSize="xs" color="blue.400" fontWeight="bold" textTransform="uppercase" letterSpacing="wider" mb={4}>
+                  Configurações do Scout
+                </Text>
+
+                <Box mb={6}>
+                  <Text fontSize="sm" color="gray.300" mb={3} fontWeight="medium">
+                    Formato <Text as="span" color="red.400">*</Text>
+                  </Text>
+                  <Flex gap={2} mb={2}>
+                    {(['3', '5', 'custom'] as const).map((val) => {
+                      const label = val === '3' ? 'MD3' : val === '5' ? 'MD5' : 'Custom'
+                      const sublabel = val === '3' ? 'Melhor de 3' : val === '5' ? 'Melhor de 5' : 'Personalizado'
+                      const isSelected = form.sets === val
+                      return (
+                        <Box
+                          key={val}
+                          as="button"
+                          flex="1"
+                          py={3}
+                          borderRadius="lg"
+                          bg={isSelected ? 'blue.900' : 'gray.900'}
+                          borderWidth="1px"
+                          borderColor={isSelected ? 'blue.500' : 'gray.700'}
+                          textAlign="center"
+                          cursor="pointer"
+                          transition="all 0.15s"
+                          _hover={{ borderColor: 'blue.600', bg: 'blue.950' }}
+                          onClick={() => handleSetsChange(val)}
+                        >
+                          <Text fontSize="md" fontWeight="bold" color={isSelected ? 'blue.200' : 'gray.400'}>
+                            {label}
+                          </Text>
+                          <Text fontSize="2xs" color={isSelected ? 'blue.400' : 'gray.600'}>
+                            {sublabel}
+                          </Text>
+                        </Box>
+                      )
+                    })}
+                  </Flex>
+                  {form.sets === 'custom' && (
+                    <Flex align="center" gap={2} mt={2}>
+                      <Text fontSize="sm" color="gray.400">Número de sets:</Text>
+                      <Input
+                        name="customSets"
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={customSets}
+                        onChange={handleCustomSetsChange}
+                        placeholder="Ex: 4"
+                        w="80px"
+                        bg="gray.900"
+                        color="white"
+                        borderColor="gray.700"
+                        size="sm"
+                        textAlign="center"
+                      />
+                    </Flex>
+                  )}
+                </Box>
+
+                <Box>
+                  <Text fontSize="sm" color="gray.300" mb={1} fontWeight="medium">Fundamentos a registrar</Text>
+                  <Text fontSize="xs" color="gray.600" mb={3}>
+                    Saque, Recepção e Ataque são obrigatórios.
+                  </Text>
+                  <Flex gap={2} flexWrap="wrap">
+                    {([
+                      { key: 'serve', label: 'Saque', required: true },
+                      { key: 'reception', label: 'Recepção', required: true },
+                      { key: 'attack', label: 'Ataque', required: true },
+                      { key: 'block', label: 'Bloqueio', required: false },
+                      { key: 'dig', label: 'Defesa', required: false },
+                      { key: 'set', label: 'Levantamento', required: false },
+                    ] as const).map((fund) => {
+                      const isActive = enabledFundamentos.includes(fund.key)
+                      const pill = (
+                        <Box
+                          key={fund.key}
+                          as="button"
+                          px={3}
+                          py={1.5}
+                          borderRadius="full"
+                          fontSize="xs"
+                          fontWeight="medium"
+                          bg={isActive ? 'green.900' : 'gray.800'}
+                          color={isActive ? 'green.300' : 'gray.500'}
+                          borderWidth="1px"
+                          borderColor={isActive ? 'green.600' : 'gray.700'}
+                          cursor={fund.required ? 'not-allowed' : 'pointer'}
+                          opacity={fund.required ? 0.6 : 1}
+                          onClick={() => {
+                            if (fund.required) return
+                            setEnabledFundamentos((prev) =>
+                              prev.includes(fund.key)
+                                ? prev.filter((f) => f !== fund.key)
+                                : [...prev, fund.key]
+                            )
+                          }}
+                          transition="all 0.15s"
+                          _hover={!fund.required ? { borderColor: 'green.500' } : {}}
+                        >
+                          {fund.label}
+                        </Box>
+                      )
+                      return fund.required ? (
+                        <Tooltip key={fund.key} label="Obrigatório" fontSize="xs" placement="top" hasArrow>
+                          {pill}
+                        </Tooltip>
+                      ) : pill
+                    })}
+                  </Flex>
+                </Box>
+              </Box>
+            </Flex>
+
+            {formError && (
+              <Box mt={4} px={4} py={3} bg="red.950" borderWidth="1px" borderColor="red.700" borderRadius="lg">
+                <Text color="red.300" fontSize="sm">{formError}</Text>
+              </Box>
+            )}
+
+            {/* CTA */}
+            <Flex mt={8} justify="flex-end">
+              <Button
+                colorScheme="blue"
+                size="lg"
+                fontWeight="bold"
+                px={10}
+                data-testid="btn-advance-step1"
+                onClick={handleAdvance}
+                isDisabled={!form.opponent || !form.sets || !form.date || !form.time}
+                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+              >
+                Próximo — Escalação ›
+              </Button>
+            </Flex>
           </Box>
-          <Button
-            colorScheme="blue"
-            size="lg"
-            fontWeight="bold"
-            fontSize="xl"
-            data-testid="btn-advance-step1"
-            onClick={handleAdvance}
-            disabled={!form.opponent || !form.sets || !form.date || !form.time}
-            w="100%"
-            boxShadow="0 0 0 2px #4299e1"
-            mt={2}
-          >
-            Avançar
-          </Button>
-        </Box>
         </>
       )}
 
       {step === 2 && (
         <>
-          <GameStepper currentStep={2} />
-          <Box
-            bg="gray.800"
-            borderRadius="xl"
-            p={5}
-            borderWidth="2px"
-            borderColor="blue.700"
-            mb={6}
-            maxW="720px"
-            mx="auto"
+          {/* Topbar de navegação */}
+          <Flex
+            px={6} py={3}
+            align="center"
+            borderBottomWidth="1px"
+            borderBottomColor="gray.800"
+            mb={8}
           >
-            <Flex mb={3} align="center">
-              <Button
-                variant="ghost"
-                size="sm"
-                color="gray.500"
-                _hover={{ color: 'gray.200' }}
-                onClick={() => setStep(1)}
-                px={1}
-                fontWeight="normal"
-              >
-                ← Partida
-              </Button>
-            </Flex>
+            <Button
+              variant="ghost"
+              size="sm"
+              color="gray.500"
+              _hover={{ color: 'gray.200', bg: 'gray.800' }}
+              onClick={() => setStep(1)}
+              fontWeight="normal"
+            >
+              ← Partida
+            </Button>
+            <Box flex="1" display="flex" justifyContent="center">
+              <GameStepper currentStep={2} />
+            </Box>
+          </Flex>
 
-            <Heading size="md" color="blue.300" mb={1}>
-              Escalação da Partida
-            </Heading>
-            <Text color="gray.400" fontSize="sm" mb={4}>
-              Clique nos atletas para incluí-los ou removê-los da partida.
-            </Text>
-
-            {/* Presets de seleção */}
-            <Flex gap={2} flexWrap="wrap" mb={4} align="center">
-              <Button
-                size="xs"
-                onClick={handleSelectAll}
-                bg={players.length > 0 && players.every(p => selectedPlayers.includes(p.id)) ? 'blue.600' : 'gray.700'}
-                color={players.length > 0 && players.every(p => selectedPlayers.includes(p.id)) ? 'white' : 'gray.300'}
-                borderWidth="1px"
-                borderColor="gray.600"
-                _hover={{ bg: 'blue.500', color: 'white' }}
-              >
-                Todos
-              </Button>
-
-              {presets.map(preset => (
-                <Flex key={preset.id} align="center" gap={0}>
-                  <Button
-                    size="xs"
-                    onClick={() => handleApplyPreset(preset)}
-                    bg="gray.700"
-                    color="gray.300"
-                    borderWidth="1px"
-                    borderColor="gray.600"
-                    borderRightRadius={0}
-                    _hover={{ bg: 'blue.600', color: 'white' }}
-                  >
-                    {preset.name}
-                  </Button>
-                  <Button
-                    size="xs"
-                    onClick={() => handleDeletePreset(preset.id)}
-                    bg="gray.700"
-                    color="red.400"
-                    borderWidth="1px"
-                    borderColor="gray.600"
-                    borderLeftRadius={0}
-                    borderLeftWidth={0}
-                    px={1.5}
-                    minW="auto"
-                    _hover={{ bg: 'red.700', color: 'white' }}
-                  >
-                    ×
-                  </Button>
-                </Flex>
-              ))}
-
-              {selectedPlayers.length > 0 && !showSavePreset && (
-                <Button
-                  size="xs"
-                  onClick={() => setShowSavePreset(true)}
-                  bg="gray.700"
-                  color="green.300"
-                  borderWidth="1px"
-                  borderColor="gray.600"
-                  _hover={{ bg: 'green.700', color: 'white' }}
-                >
-                  + Salvar seleção
-                </Button>
-              )}
-
-              {showSavePreset && (
-                <Flex align="center" gap={1}>
-                  <Input
-                    size="xs"
-                    placeholder="Nome do preset"
-                    value={presetName}
-                    onChange={e => setPresetName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
-                    bg="gray.900"
-                    borderColor="gray.600"
-                    color="white"
-                    w="140px"
-                    autoFocus
-                  />
-                  <Button
-                    size="xs"
-                    onClick={handleSavePreset}
-                    bg="green.600"
-                    color="white"
-                    _hover={{ bg: 'green.500' }}
-                    isDisabled={!presetName.trim()}
-                  >
-                    Salvar
-                  </Button>
-                  <Button
-                    size="xs"
-                    onClick={() => { setShowSavePreset(false); setPresetName('') }}
-                    bg="gray.700"
-                    color="gray.400"
-                    _hover={{ bg: 'gray.600' }}
-                  >
-                    ×
-                  </Button>
-                </Flex>
-              )}
-            </Flex>
-
-            {/* Barra de composição em tempo real */}
-            <Flex gap={2} flexWrap="wrap" mb={4}>
-              {([
-                { key: 'ponteiro', label: 'Pontas', need: 2, color: 'purple' },
-                { key: 'central', label: 'Centrais', need: 2, color: 'teal' },
-                { key: 'levantador', label: 'Levantador', need: 1, color: 'blue' },
-                { key: 'oposto', label: 'Oposto', need: 1, color: 'orange' },
-              ] as const).map(({ key, label, need, color }) => {
-                const current = positionCounts[key] || 0
-                const done = current >= need
-                return (
+          <Box maxW="900px" mx="auto" px={6} pb={12}>
+            {/* Cabeçalho + info da partida */}
+            <Flex align="flex-start" justify="space-between" mb={6}>
+              <Box>
+                <Heading size="lg" color="white" fontWeight="bold">Escalação</Heading>
+                <Text color="gray.500" fontSize="sm" mt={1}>
+                  Selecione os atletas que participarão desta partida.
+                </Text>
+              </Box>
+              {/* Requisitos de composição */}
+              <Flex gap={2} flexWrap="wrap" justify="flex-end">
+                {([
+                  { key: 'ponteiro', label: 'Pontas', need: 2, color: 'purple' },
+                  { key: 'central', label: 'Centrais', need: 2, color: 'teal' },
+                  { key: 'levantador', label: 'Levantador', need: 1, color: 'blue' },
+                  { key: 'oposto', label: 'Oposto', need: 1, color: 'orange' },
+                ] as const).map(({ key, label, need, color }) => {
+                  const current = positionCounts[key] || 0
+                  const done = current >= need
+                  return (
+                    <Flex
+                      key={key}
+                      align="center"
+                      gap={1.5}
+                      px={3}
+                      py={1.5}
+                      borderRadius="full"
+                      bg={done ? `${color}.950` : 'gray.900'}
+                      borderWidth="1px"
+                      borderColor={done ? `${color}.600` : 'gray.700'}
+                      transition="all 0.2s"
+                    >
+                      <Box
+                        w="6px" h="6px" borderRadius="full"
+                        bg={done ? `${color}.400` : 'gray.600'}
+                        flexShrink={0}
+                      />
+                      <Text fontSize="xs" color={done ? `${color}.300` : 'gray.500'} fontWeight={done ? 'bold' : 'normal'}>
+                        {label} {current}/{need}
+                      </Text>
+                    </Flex>
+                  )
+                })}
+                {hasLiberoInSquad && (
                   <Flex
-                    key={key}
-                    align="center"
-                    gap={1.5}
-                    px={3}
-                    py={1}
-                    borderRadius="full"
-                    bg={done ? `${color}.900` : 'gray.900'}
+                    align="center" gap={1.5} px={3} py={1.5} borderRadius="full"
+                    bg={liberoCount > 0 ? 'yellow.950' : 'gray.900'}
                     borderWidth="1px"
-                    borderColor={done ? `${color}.600` : 'gray.600'}
+                    borderColor={liberoCount > 0 ? 'yellow.600' : 'gray.700'}
+                    transition="all 0.2s"
                   >
-                    <Box w="6px" h="6px" borderRadius="full" bg={done ? `${color}.400` : 'gray.600'} />
-                    <Text fontSize="xs" color={done ? `${color}.300` : 'gray.500'} fontWeight={done ? 'bold' : 'normal'}>
-                      {label} {current}/{need}
+                    <Box w="6px" h="6px" borderRadius="full" bg={liberoCount > 0 ? 'yellow.400' : 'gray.600'} flexShrink={0} />
+                    <Text fontSize="xs" color={liberoCount > 0 ? 'yellow.300' : 'gray.500'} fontWeight={liberoCount > 0 ? 'bold' : 'normal'}>
+                      Líbero {liberoCount}
                     </Text>
                   </Flex>
-                )
-              })}
-              {hasLiberoInSquad && (
-                <Flex
-                  align="center"
-                  gap={1.5}
-                  px={3}
-                  py={1}
-                  borderRadius="full"
-                  bg={liberoCount > 0 ? 'yellow.900' : 'gray.900'}
-                  borderWidth="1px"
-                  borderColor={liberoCount > 0 ? 'yellow.600' : 'gray.600'}
-                >
-                  <Box w="6px" h="6px" borderRadius="full" bg={liberoCount > 0 ? 'yellow.400' : 'gray.600'} />
-                  <Text fontSize="xs" color={liberoCount > 0 ? 'yellow.300' : 'gray.500'} fontWeight={liberoCount > 0 ? 'bold' : 'normal'}>
-                    Líbero {liberoCount} <Text as="span" opacity={0.6}>(opt.)</Text>
-                  </Text>
-                </Flex>
-              )}
+                )}
+              </Flex>
             </Flex>
 
-            {/* Filtro por posição */}
-            <Flex gap={2} flexWrap="wrap" mb={4}>
-              {(([
-                { key: 'todos', label: 'Todos' },
-                { key: 'ponteiro', label: 'Pontas' },
-                { key: 'central', label: 'Centrais' },
-                { key: 'levantador', label: 'Levantador' },
-                { key: 'oposto', label: 'Oposto' },
-                ...(hasLiberoInSquad ? [{ key: 'libero', label: 'Líbero' }] : []),
-              ]) as { key: string; label: string }[]).map(({ key, label }) => {
-                const isActive = positionFilter === key
-                return (
-                  <Button
-                    key={key}
-                    size="xs"
-                    onClick={() => setPositionFilter(key)}
-                    bg={isActive ? 'blue.700' : 'gray.700'}
-                    color={isActive ? 'blue.100' : 'gray.400'}
-                    borderWidth="1px"
-                    borderColor={isActive ? 'blue.500' : 'gray.600'}
-                    _hover={{ bg: isActive ? 'blue.600' : 'gray.600' }}
-                    fontWeight={isActive ? 'bold' : 'normal'}
+            {/* Toolbar: presets + filtro + seleção rápida */}
+            <Flex align="center" justify="space-between" mb={5} gap={4}>
+              {/* Filtro por posição */}
+              <Flex gap={1.5} flexWrap="wrap">
+                {(([
+                  { key: 'todos', label: 'Todos' },
+                  { key: 'ponteiro', label: 'Pontas' },
+                  { key: 'central', label: 'Centrais' },
+                  { key: 'levantador', label: 'Levantador' },
+                  { key: 'oposto', label: 'Oposto' },
+                  ...(hasLiberoInSquad ? [{ key: 'libero', label: 'Líbero' }] : []),
+                ]) as { key: string; label: string }[]).map(({ key, label }) => {
+                  const isActive = positionFilter === key
+                  return (
+                    <Box
+                      key={key}
+                      as="button"
+                      px={3}
+                      py={1}
+                      borderRadius="full"
+                      fontSize="xs"
+                      fontWeight={isActive ? 'bold' : 'normal'}
+                      bg={isActive ? 'blue.800' : 'gray.900'}
+                      color={isActive ? 'blue.200' : 'gray.500'}
+                      borderWidth="1px"
+                      borderColor={isActive ? 'blue.500' : 'gray.700'}
+                      cursor="pointer"
+                      transition="all 0.15s"
+                      _hover={{ borderColor: 'blue.500', color: 'blue.200' }}
+                      onClick={() => setPositionFilter(key)}
+                    >
+                      {label}
+                    </Box>
+                  )
+                })}
+              </Flex>
+
+              {/* Presets + selecionar todos */}
+              <Flex gap={2} align="center" flexShrink={0}>
+                <Box
+                  as="button"
+                  px={3} py={1} borderRadius="full" fontSize="xs"
+                  bg={players.length > 0 && players.every(p => selectedPlayers.includes(p.id)) ? 'blue.800' : 'gray.900'}
+                  color={players.length > 0 && players.every(p => selectedPlayers.includes(p.id)) ? 'blue.200' : 'gray.500'}
+                  borderWidth="1px"
+                  borderColor={players.length > 0 && players.every(p => selectedPlayers.includes(p.id)) ? 'blue.500' : 'gray.700'}
+                  cursor="pointer"
+                  transition="all 0.15s"
+                  _hover={{ borderColor: 'blue.500', color: 'blue.200' }}
+                  onClick={handleSelectAll}
+                >
+                  Selecionar todos
+                </Box>
+
+                {presets.map(preset => (
+                  <Flex key={preset.id} align="center" gap={0}>
+                    <Box
+                      as="button"
+                      px={3} py={1}
+                      borderRadius="full"
+                      borderRightRadius={0}
+                      fontSize="xs"
+                      bg="gray.900"
+                      color="gray.400"
+                      borderWidth="1px"
+                      borderColor="gray.700"
+                      cursor="pointer"
+                      _hover={{ bg: 'blue.800', color: 'blue.200', borderColor: 'blue.500' }}
+                      transition="all 0.15s"
+                      onClick={() => handleApplyPreset(preset)}
+                    >
+                      {preset.name}
+                    </Box>
+                    <Box
+                      as="button"
+                      px={2} py={1}
+                      borderRadius="full"
+                      borderLeftRadius={0}
+                      fontSize="xs"
+                      bg="gray.900"
+                      color="red.500"
+                      borderWidth="1px"
+                      borderLeftWidth={0}
+                      borderColor="gray.700"
+                      cursor="pointer"
+                      _hover={{ bg: 'red.950', color: 'red.300', borderColor: 'red.700' }}
+                      transition="all 0.15s"
+                      onClick={() => handleDeletePreset(preset.id)}
+                    >
+                      ×
+                    </Box>
+                  </Flex>
+                ))}
+
+                {selectedPlayers.length > 0 && !showSavePreset && (
+                  <Box
+                    as="button"
+                    px={3} py={1} borderRadius="full" fontSize="xs"
+                    bg="gray.900" color="green.400"
+                    borderWidth="1px" borderColor="gray.700"
+                    cursor="pointer"
+                    _hover={{ bg: 'green.950', borderColor: 'green.600', color: 'green.300' }}
+                    transition="all 0.15s"
+                    onClick={() => setShowSavePreset(true)}
                   >
-                    {label}
-                  </Button>
-                )
-              })}
+                    + Salvar seleção
+                  </Box>
+                )}
+
+                {showSavePreset && (
+                  <Flex align="center" gap={1}>
+                    <Input
+                      size="xs"
+                      placeholder="Nome do preset"
+                      value={presetName}
+                      onChange={e => setPresetName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                      bg="gray.900"
+                      borderColor="gray.700"
+                      color="white"
+                      w="140px"
+                      _focus={{ borderColor: 'blue.500' }}
+                      autoFocus
+                    />
+                    <Button size="xs" onClick={handleSavePreset} colorScheme="green" isDisabled={!presetName.trim()}>
+                      Salvar
+                    </Button>
+                    <Button size="xs" onClick={() => { setShowSavePreset(false); setPresetName('') }} variant="ghost" color="gray.500">
+                      ×
+                    </Button>
+                  </Flex>
+                )}
+              </Flex>
             </Flex>
 
             {/* Grade de atletas */}
             {loadingPlayers ? (
-              <Text color="gray.500" fontSize="sm" mb={4}>Carregando atletas...</Text>
+              <Flex align="center" justify="center" py={16}>
+                <Text color="gray.500" fontSize="sm">Carregando atletas...</Text>
+              </Flex>
             ) : !selectedTeamId ? (
-              <Text color="gray.500" fontSize="sm" textAlign="center" py={6}>
-                Selecione uma equipe no dashboard para ver os atletas.
-              </Text>
+              <Flex align="center" justify="center" py={16}>
+                <Text color="gray.600" fontSize="sm" textAlign="center">
+                  Selecione uma equipe no dashboard para ver os atletas.
+                </Text>
+              </Flex>
             ) : filteredPlayers.length === 0 ? (
-              <Text color="gray.500" fontSize="sm" textAlign="center" py={6}>
-                Nenhum atleta cadastrado nesta posição.
-              </Text>
+              <Flex align="center" justify="center" py={16}>
+                <Text color="gray.600" fontSize="sm">Nenhum atleta cadastrado nesta posição.</Text>
+              </Flex>
             ) : (
-              <Flex wrap="wrap" gap={3} mb={4}>
+              <Flex wrap="wrap" gap={3} mb={6}>
                 {filteredPlayers.map((player) => {
                   const isSelected = selectedPlayers.includes(player.id)
+                  const borderCol = positionBorderColor[player.position] ?? 'blue.500'
+                  const textCol = positionTextColor[player.position] ?? 'gray.400'
                   return (
                     <Box
                       key={player.id}
                       onClick={() => togglePlayer(player.id)}
                       cursor="pointer"
-                      borderWidth="2px"
-                      borderColor={isSelected ? (positionBorderColor[player.position] ?? 'blue.500') : 'gray.700'}
-                      bg={isSelected ? 'gray.700' : 'gray.900'}
+                      w="120px"
+                      borderWidth="1px"
+                      borderColor={isSelected ? borderCol : 'gray.800'}
+                      bg={isSelected ? 'gray.800' : 'gray.900'}
                       borderRadius="xl"
                       overflow="hidden"
-                      minW="110px"
-                      maxW="130px"
-                      opacity={isSelected ? 1 : 0.5}
                       transition="all 0.15s"
+                      boxShadow={isSelected ? `0 0 0 1px var(--chakra-colors-${borderCol.replace('.', '-')})` : 'none'}
                       _hover={{
-                        opacity: 1,
-                        borderColor: positionBorderColor[player.position] ?? 'blue.400',
+                        borderColor: borderCol,
                         transform: 'translateY(-2px)',
-                        boxShadow: 'md',
+                        boxShadow: 'lg',
                       }}
                     >
-                      <Box h="80px" overflow="hidden" position="relative">
-                        {player.photo && (
+                      {/* Foto */}
+                      <Box h="88px" overflow="hidden" position="relative" bg="gray.800">
+                        {player.photo ? (
                           <Image
                             src={player.photo}
                             alt={player.name}
                             fill
-                            style={{ objectFit: 'cover' }}
-                            sizes="(max-width: 130px) 100vw, 130px"
+                            style={{ objectFit: 'cover', opacity: isSelected ? 1 : 0.45 }}
+                            sizes="120px"
                           />
+                        ) : (
+                          <Flex h="full" align="center" justify="center" opacity={isSelected ? 0.6 : 0.25}>
+                            <Text fontSize="2xl" color="gray.600">👤</Text>
+                          </Flex>
                         )}
+                        {/* Check overlay */}
                         {isSelected && (
                           <Box
                             position="absolute"
-                            top={1}
-                            right={1}
+                            top={1.5}
+                            right={1.5}
                             w="18px"
                             h="18px"
                             borderRadius="full"
@@ -1444,30 +1524,41 @@ export default function ScoutPage() {
                             display="flex"
                             alignItems="center"
                             justifyContent="center"
+                            boxShadow="0 0 0 2px rgba(0,0,0,0.4)"
                           >
                             <Text color="white" fontSize="9px" lineHeight="1" fontWeight="bold">✓</Text>
                           </Box>
                         )}
+                        {/* Número sobreposto no canto inferior esquerdo */}
+                        <Box
+                          position="absolute"
+                          bottom={1}
+                          left={2}
+                          bg="blackAlpha.700"
+                          px={1.5}
+                          py={0.5}
+                          borderRadius="md"
+                        >
+                          <Text fontSize="xs" fontWeight="bold" color="white">#{player.jerseyNumber}</Text>
+                        </Box>
                       </Box>
-                      <Box p={2}>
-                        <Flex justify="space-between" align="center" mb={0.5}>
-                          <Badge colorScheme={isSelected ? 'blue' : 'gray'} fontSize="2xs">
-                            #{player.jerseyNumber}
-                          </Badge>
-                          <Text
-                            fontSize="2xs"
-                            color={isSelected ? (positionTextColor[player.position] ?? 'gray.400') : 'gray.600'}
-                          >
-                            {positionDisplayLabel[player.position] ?? player.position}
-                          </Text>
-                        </Flex>
+                      {/* Info */}
+                      <Box px={2} py={2}>
                         <Text
                           fontWeight={isSelected ? 'bold' : 'normal'}
-                          color={isSelected ? 'white' : 'gray.500'}
+                          color={isSelected ? 'white' : 'gray.600'}
                           fontSize="xs"
                           noOfLines={1}
+                          mb={0.5}
                         >
                           {player.name}
+                        </Text>
+                        <Text
+                          fontSize="2xs"
+                          color={isSelected ? textCol : 'gray.700'}
+                          fontWeight="medium"
+                        >
+                          {positionDisplayLabel[player.position] ?? player.position}
                         </Text>
                       </Box>
                     </Box>
@@ -1476,385 +1567,315 @@ export default function ScoutPage() {
               </Flex>
             )}
 
-            {/* Status + erro inline */}
-            <Flex justify="space-between" align="center" mb={4} minH="20px">
-              <Text color="gray.400" fontSize="sm">
-                {selectedPlayers.length} atleta{selectedPlayers.length !== 1 ? 's' : ''} selecionado{selectedPlayers.length !== 1 ? 's' : ''}
-              </Text>
-              {playerSelectError && (
-                <Text color="red.300" fontSize="xs" textAlign="right" maxW="60%">
-                  {playerSelectError}
-                </Text>
-              )}
-            </Flex>
-
-            <Button
-              bg={selectedPlayers.length >= 6 && playerSelectError === '' ? 'green.500' : 'green.800'}
-              color="white"
-              size="lg"
-              fontWeight="bold"
-              fontSize="xl"
-              w="100%"
-              height="60px"
-              data-testid="btn-advance-step2"
-              onClick={handleAdvanceToScout}
-              disabled={selectedPlayers.length < 6 || playerSelectError !== ''}
-              _hover={{
-                transform: 'translateY(-2px)',
-                boxShadow: 'xl',
-                bg: selectedPlayers.length >= 6 && playerSelectError === '' ? 'green.600' : 'green.800',
-              }}
-              _disabled={{
-                opacity: 0.8,
-                cursor: 'not-allowed',
-                _hover: { transform: 'none' },
-                bg: 'green.800',
-                color: 'whiteAlpha.900',
-              }}
-              transition="all 0.2s"
+            {/* Footer: status + erro + CTA */}
+            <Flex
+              align="center"
+              justify="space-between"
+              pt={5}
+              borderTopWidth="1px"
+              borderTopColor="gray.800"
             >
-              Avançar para Scout ➜
-            </Button>
+              <Box>
+                <Text color={selectedPlayers.length >= 6 ? 'green.400' : 'gray.500'} fontSize="sm" fontWeight="medium">
+                  {selectedPlayers.length} atleta{selectedPlayers.length !== 1 ? 's' : ''} selecionado{selectedPlayers.length !== 1 ? 's' : ''}
+                  {selectedPlayers.length >= 6 && ' ✓'}
+                </Text>
+                {playerSelectError && (
+                  <Text color="red.400" fontSize="xs" mt={0.5}>{playerSelectError}</Text>
+                )}
+              </Box>
+              <Button
+                colorScheme="green"
+                size="lg"
+                fontWeight="bold"
+                px={10}
+                data-testid="btn-advance-step2"
+                onClick={handleAdvanceToScout}
+                isDisabled={selectedPlayers.length < 6 || playerSelectError !== ''}
+                _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+              >
+                Iniciar Scout
+              </Button>
+            </Flex>
           </Box>
         </>
       )}
 
       {step === 3 && (
-        <>
-          {/* Header do Jogo — 2 barras */}
-          <Box
+        <Box position="fixed" inset={0} zIndex={100} display="flex" flexDirection="column" bg="gray.900">
+          {/* TOPBAR UNIFICADO */}
+          <Flex
             bg="blue.900"
-            borderRadius="xl"
-            borderWidth="1px"
-            borderColor="blue.800"
-            shadow="xl"
-            mb={4}
-            overflow="hidden"
+            borderBottomWidth="1px"
+            borderBottomColor="blue.800"
+            px={4}
+            py={2}
+            align="center"
+            position="relative"
+            flexShrink={0}
+            minH="48px"
           >
-            {/* Barra Superior: contexto + controles principais */}
-            <Flex
-              px={{ base: 3, md: 5 }}
-              py={3}
-              align="center"
-              justify="space-between"
-              gap={3}
-              borderBottomWidth="1px"
-              borderColor="whiteAlpha.100"
-              flexWrap="wrap"
-            >
-              <Box flex="1" minW={0}>
-                <Text
-                  color="blue.100"
-                  fontSize={{ base: 'md', md: 'lg' }}
+            {/* LEFT: botão principal + divisor */}
+            <Flex align="center" gap={2} flexShrink={0}>
+              {gameStarted && (
+                <Button
+                  size="sm"
+                  colorScheme="yellow"
+                  variant="solid"
+                  onClick={handleSaveAndExit}
                   fontWeight="bold"
-                  noOfLines={1}
                 >
-                  {homeTeamName}{' '}
-                  <Text as="span" color="gray.500" fontWeight="normal">vs</Text>{' '}
-                  {opponentName}
-                </Text>
-                <Text color="blue.400" fontSize="xs" mt={0.5} noOfLines={1}>
-                  {tournamentName} · {formattedMatchDate} às {formattedMatchTime} · {locationName}
-                </Text>
-              </Box>
-              <Flex gap={2} align="center" flexShrink={0}>
-                {saveStatus === 'saving' && (
-                  <Flex align="center" gap={1.5}>
-                    <Box w="6px" h="6px" borderRadius="full" bg="yellow.400" className="pulse-live" />
-                    <Text color="yellow.400" fontSize="xs">Salvando</Text>
-                  </Flex>
-                )}
-                {saveStatus === 'saved' && (
-                  <Box w="6px" h="6px" borderRadius="full" bg="green.400" title="Salvo" />
-                )}
-                {saveStatus === 'error' && (
-                  <Flex align="center" gap={1.5}>
-                    <Box w="6px" h="6px" borderRadius="full" bg="red.400" />
-                    <Text color="red.400" fontSize="xs">Erro</Text>
-                  </Flex>
-                )}
-                {/* Botão "Iniciar Scout" durante fase de escalação */}
-                {isLineupPhase && (() => {
-                  const filledCount = Object.values(courtPositions).filter(id => id !== null).length
-                  const isLineupReady = filledCount === 6
-                  return (
-                    <Button
-                      size="sm"
-                      colorScheme="green"
-                      data-testid="btn-start-scout"
-                      onClick={handleStartScout}
-                      isDisabled={!isLineupReady}
-                      boxShadow={isLineupReady ? '0 0 12px rgba(72, 187, 120, 0.4)' : 'none'}
-                      _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
-                      gap={1}
-                    >
-                      ▶ Iniciar Scout {!isLineupReady && `(${filledCount}/6)`}
-                    </Button>
-                  )
-                })()}
-                {/* Botão de Reiniciar — visível no header após o jogo começar */}
-                {(gameStarted || hasStarted) && (
+                  ⏸ Pausar
+                </Button>
+              )}
+              {!gameStarted && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  color="gray.400"
+                  _hover={{ color: 'gray.200' }}
+                  onClick={() => setStep(2)}
+                  px={1}
+                >
+                  ← Escalação
+                </Button>
+              )}
+              <Box w="1px" h="20px" bg="whiteAlpha.200" />
+            </Flex>
+
+            {/* CENTER: Scoreboard absoluto */}
+            <Box
+              position="absolute"
+              left="50%"
+              top="50%"
+              transform="translate(-50%, -50%)"
+              pointerEvents="none"
+            >
+              <Scoreboard
+                variant="inline"
+                homeTeamName={homeTeamName}
+                opponentName={opponentName}
+                score={score}
+                currentSet={currentSet}
+                totalSets={totalSets}
+                isLive={gameStarted}
+                servingTeam={gameStarted ? servingTeam : undefined}
+                setsHistory={setsHistory}
+              />
+            </Box>
+
+            {/* RIGHT: controles + botões de jogo */}
+            <Flex ml="auto" align="center" gap={2} flexShrink={0}>
+              {hasStarted && <RotationControls rotation={rotation} />}
+
+              {/* Fundamentos — pill toggle */}
+              <Popover placement="bottom-end">
+                <PopoverTrigger>
+                  <Box
+                    as="button"
+                    px={3}
+                    h="8"
+                    borderRadius="md"
+                    fontSize="xs"
+                    fontWeight="medium"
+                    bg={enabledFundamentos.length < 6 ? 'orange.950' : 'gray.800'}
+                    color={enabledFundamentos.length < 6 ? 'orange.300' : 'gray.400'}
+                    borderWidth="1px"
+                    borderColor={enabledFundamentos.length < 6 ? 'orange.700' : 'gray.700'}
+                    cursor="pointer"
+                    transition="all 0.15s"
+                    _hover={{ borderColor: 'blue.500', color: 'white', bg: 'gray.700' }}
+                    whiteSpace="nowrap"
+                    display="flex"
+                    alignItems="center"
+                  >
+                    Fundamentos{enabledFundamentos.length < 6 ? ` ${enabledFundamentos.length}/6` : ''}
+                  </Box>
+                </PopoverTrigger>
+                <PopoverContent bg="gray.900" borderColor="blue.500" w="260px">
+                  <PopoverArrow bg="gray.900" />
+                  <PopoverBody p={4}>
+                    <Text fontSize="sm" color="white" fontWeight="bold" mb={3}>Fundamentos ativos</Text>
+                    <Flex gap={2} flexWrap="wrap">
+                      {([
+                        { key: 'serve', label: 'Saque', required: true },
+                        { key: 'reception', label: 'Recepção', required: true },
+                        { key: 'attack', label: 'Ataque', required: true },
+                        { key: 'block', label: 'Bloqueio', required: false },
+                        { key: 'dig', label: 'Defesa', required: false },
+                        { key: 'set', label: 'Levantamento', required: false },
+                      ] as const).map((fund) => {
+                        const isActive = enabledFundamentos.includes(fund.key)
+                        return (
+                          <Box
+                            key={fund.key}
+                            as="button"
+                            px={3}
+                            py={1}
+                            borderRadius="full"
+                            fontSize="xs"
+                            fontWeight="medium"
+                            bg={isActive ? 'green.800' : 'gray.700'}
+                            color={isActive ? 'green.200' : 'gray.500'}
+                            borderWidth="1px"
+                            borderColor={isActive ? 'green.600' : 'gray.600'}
+                            cursor={fund.required ? 'not-allowed' : 'pointer'}
+                            opacity={fund.required ? 0.7 : 1}
+                            onClick={() => {
+                              if (fund.required) return
+                              setEnabledFundamentos((prev) =>
+                                prev.includes(fund.key)
+                                  ? prev.filter((f) => f !== fund.key)
+                                  : [...prev, fund.key]
+                              )
+                            }}
+                            transition="all 0.15s"
+                          >
+                            {fund.label}{fund.required ? ' ✓' : ''}
+                          </Box>
+                        )
+                      })}
+                    </Flex>
+                  </PopoverBody>
+                </PopoverContent>
+              </Popover>
+
+              {/* Dicas — toggle com track visual */}
+              <Flex
+                as="button"
+                align="center"
+                gap={2}
+                px={2.5}
+                h="8"
+                borderRadius="md"
+                bg={showTips ? 'blue.900' : 'gray.800'}
+                color={showTips ? 'blue.300' : 'gray.500'}
+                borderWidth="1px"
+                borderColor={showTips ? 'blue.700' : 'gray.700'}
+                cursor="pointer"
+                transition="all 0.2s"
+                _hover={{ borderColor: 'blue.600', color: 'blue.300' }}
+                onClick={toggleTips}
+                flexShrink={0}
+              >
+                {/* Track */}
+                <Box
+                  w="26px"
+                  h="13px"
+                  borderRadius="full"
+                  bg={showTips ? 'blue.500' : 'gray.700'}
+                  position="relative"
+                  transition="background 0.2s"
+                  flexShrink={0}
+                >
+                  {/* Thumb */}
+                  <Box
+                    position="absolute"
+                    top="2.5px"
+                    left={showTips ? '14px' : '2.5px'}
+                    w="8px"
+                    h="8px"
+                    borderRadius="full"
+                    bg="white"
+                    transition="left 0.15s ease"
+                    boxShadow="0 1px 2px rgba(0,0,0,0.4)"
+                  />
+                </Box>
+                <Text fontSize="xs" fontWeight="medium" lineHeight="1">Dicas</Text>
+              </Flex>
+
+              {saveStatus === 'saving' && <Box w="6px" h="6px" borderRadius="full" bg="yellow.400" className="pulse-live" title="Salvando" />}
+              {saveStatus === 'saved' && <Box w="6px" h="6px" borderRadius="full" bg="green.400" title="Salvo" />}
+              {saveStatus === 'error' && <Box w="6px" h="6px" borderRadius="full" bg="red.400" title="Erro ao salvar" />}
+              <Box w="1px" h="20px" bg="whiteAlpha.200" />
+              {isLineupPhase && (() => {
+                const filledCount = Object.values(courtPositions).filter(id => id !== null).length
+                const isLineupReady = filledCount === 6
+                return (
                   <Button
                     size="sm"
                     colorScheme="green"
-                    variant="outline"
-                    data-testid="btn-start-game"
-                    onClick={() => {
-                      handleInitialServerChange(servingTeam)
-                      if (servingTeam === 'home') {
-                        setInitialRotation(String(rotation))
-                      }
-                      setIsStartDialogOpen(true)
-                    }}
-                    disabled={selectedPlayers.length < 6}
+                    data-testid="btn-start-scout"
+                    onClick={handleStartScout}
+                    isDisabled={!isLineupReady}
+                    flexShrink={0}
+                    boxShadow={isLineupReady ? '0 0 12px rgba(72, 187, 120, 0.4)' : 'none'}
                   >
-                    Reiniciar
+                    ▶ Iniciar Scout {!isLineupReady && `(${filledCount}/6)`}
                   </Button>
-                )}
-                {gameStarted && (
-                  <>
-                    <Button
-                      size="sm"
-                      colorScheme="blue"
-                      variant="outline"
-                      data-testid="btn-end-set"
-                      onClick={() => setIsEndSetDialogOpen(true)}
-                    >
-                      Finalizar Set
-                    </Button>
-                    <Box w="1px" h="18px" bg="whiteAlpha.200" flexShrink={0} />
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      color="yellow.400"
-                      onClick={handleSaveAndExit}
-                      _hover={{ bg: 'yellow.900', color: 'yellow.300' }}
-                      px={2}
-                      whiteSpace="nowrap"
-                    >
-                      💾 Salvar e Sair
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      color="red.500"
-                      data-testid="btn-end-match"
-                      onClick={() => setIsEndMatchDialogOpen(true)}
-                      _hover={{ bg: 'red.900', color: 'red.300' }}
-                      px={2}
-                      whiteSpace="nowrap"
-                    >
-                      Encerrar Partida
-                    </Button>
-                  </>
-                )}
-              </Flex>
-            </Flex>
-
-            {/* Barra Inferior: utilitários do scout */}
-            <Flex
-              px={{ base: 3, md: 5 }}
-              py={2}
-              gap={{ base: 3, md: 5 }}
-              align="center"
-              flexWrap="wrap"
-            >
-              <RotationControls rotation={rotation} />
-              <ActionLog actions={actions} countOnly />
-              <Flex align="center" gap={2}>
-                <Text color="blue.300" fontSize="xs" fontWeight="bold" whiteSpace="nowrap">
-                  Vídeo
-                </Text>
-                <Input
-                  ref={timestampInputRef}
-                  value={videoTimestamp}
-                  onChange={handleTimestampChange}
-                  onKeyDown={handleTimestampKeyDown}
-                  placeholder="MM:SS"
+                )
+              })()}
+              {(gameStarted || hasStarted) && (
+                <Button
                   size="sm"
-                  w="80px"
-                  bg="gray.900"
-                  color="white"
-                  borderColor="blue.700"
-                  textAlign="center"
-                  fontFamily="mono"
-                  fontSize="sm"
-                  _placeholder={{ color: 'gray.500' }}
-                />
-                <Text color="gray.500" fontSize="xs" whiteSpace="nowrap">
-                  [T]
-                </Text>
-              </Flex>
-              <Flex align="center" gap={3} ml="auto">
-                <Flex align="center" gap={2}>
-                  <Text color="gray.400" fontSize="xs" whiteSpace="nowrap">
-                    Dicas
-                  </Text>
-                  <Switch
+                  bg="transparent"
+                  color="gray.400"
+                  borderWidth="1px"
+                  borderColor="gray.700"
+                  _hover={{ bg: 'gray.700', color: 'gray.200', borderColor: 'gray.600' }}
+                  _active={{ bg: 'gray.800' }}
+                  onClick={() => {
+                    handleInitialServerChange(servingTeam)
+                    if (servingTeam === 'home') setInitialRotation(String(rotation))
+                    setIsStartDialogOpen(true)
+                  }}
+                  flexShrink={0}
+                >
+                  Reiniciar
+                </Button>
+              )}
+              {gameStarted && (
+                <>
+                  <Button
                     size="sm"
-                    colorScheme="blue"
-                    isChecked={showTips}
-                    onChange={toggleTips}
-                  />
-                </Flex>
-                <Popover placement="bottom-end">
-                  <PopoverTrigger>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      color="gray.400"
-                      _hover={{ color: 'white', bg: 'gray.700' }}
-                      px={2}
-                    >
-                      Fundamentos
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent bg="gray.900" borderColor="blue.500" w="260px">
-                    <PopoverArrow bg="gray.900" />
-                    <PopoverBody p={4}>
-                      <Text fontSize="sm" color="white" fontWeight="bold" mb={3}>
-                        Fundamentos ativos
-                      </Text>
-                      <Flex gap={2} flexWrap="wrap">
-                        {([
-                          { key: 'serve', label: 'Saque', required: true },
-                          { key: 'reception', label: 'Recepção', required: true },
-                          { key: 'attack', label: 'Ataque', required: true },
-                          { key: 'block', label: 'Bloqueio', required: false },
-                          { key: 'dig', label: 'Defesa', required: false },
-                          { key: 'set', label: 'Levantamento', required: false },
-                        ] as const).map((fund) => {
-                          const isActive = enabledFundamentos.includes(fund.key)
-                          return (
-                            <Box
-                              key={fund.key}
-                              as="button"
-                              px={3}
-                              py={1}
-                              borderRadius="full"
-                              fontSize="xs"
-                              fontWeight="medium"
-                              bg={isActive ? 'green.800' : 'gray.700'}
-                              color={isActive ? 'green.200' : 'gray.500'}
-                              borderWidth="1px"
-                              borderColor={isActive ? 'green.600' : 'gray.600'}
-                              cursor={fund.required ? 'not-allowed' : 'pointer'}
-                              opacity={fund.required ? 0.7 : 1}
-                              onClick={() => {
-                                if (fund.required) return
-                                setEnabledFundamentos((prev) =>
-                                  prev.includes(fund.key)
-                                    ? prev.filter((f) => f !== fund.key)
-                                    : [...prev, fund.key]
-                                )
-                              }}
-                              transition="all 0.15s"
-                            >
-                              {fund.label}{fund.required ? ' ✓' : ''}
-                            </Box>
-                          )
-                        })}
-                      </Flex>
-                    </PopoverBody>
-                  </PopoverContent>
-                </Popover>
-              </Flex>
-            </Flex>
-          </Box>
-
-          {/* Área Principal: Quadra + Sidebar */}
-          <Flex
-            direction={{ base: 'column', lg: 'row' }}
-            gap={4}
-            alignItems="flex-start"
-            mb={4}
-          >
-            {/* Coluna da Quadra: Quadra + RallyFlow abaixo */}
-            <Box flex="1" position="relative" w="100%" display="flex" flexDirection="column" gap={4}>
-              {/* Wrapper relativo para o overlay de início */}
-              <Box position="relative">
-                <VolleyballCourt
-                  onActionRegister={registerAction}
-                  rotation={rotation}
-                  courtPositions={courtPositions}
-                  onPositionChange={handlePositionChange}
-                  rallyState={rallyState}
-                  gameStarted={gameStarted}
-                  onSubstitution={substitutePlayer}
-                  onUndo={handleUndoWithToast}
-                  videoTimestamp={videoTimestamp}
-                  onFocusTimestamp={handleFocusTimestamp}
-                  showTips={showTips}
-                  enabledFundamentos={enabledFundamentos}
-                  liberoId={liberoId || undefined}
-                  onLiberoChange={setLiberoId}
-                  gameConfig={gameConfig || undefined}
-                />
-                {/* Etapa 1: Tela inicial com blur — botão "Começar Scout" abre modal de config */}
-                {!gameStarted && !isLineupPhase && (
-                  <Box
-                    position="absolute"
-                    top="0"
-                    left="0"
-                    right="0"
-                    bottom="0"
-                    borderRadius="2xl"
-                    bg="blackAlpha.700"
-                    backdropFilter="blur(5px)"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    zIndex={35}
+                    bg="blue.900"
+                    color="blue.300"
+                    borderWidth="1px"
+                    borderColor="blue.800"
+                    _hover={{ bg: 'blue.800', color: 'blue.200' }}
+                    _active={{ bg: 'blue.950' }}
+                    data-testid="btn-end-set"
+                    onClick={() => setIsEndSetDialogOpen(true)}
+                    flexShrink={0}
                   >
-                    <Box textAlign="center" px={6}>
-                      <Text fontSize="4xl" mb={3} lineHeight="1" userSelect="none">
-                        🏐
-                      </Text>
-                      <Text
-                        color="white"
-                        fontSize={{ base: 'lg', md: 'xl' }}
-                        fontWeight="bold"
-                        mb={1}
-                      >
-                        {hasStarted && setsHistory.length > 0
-                          ? `Set ${currentSet} — Configurar escalação`
-                          : hasStarted
-                          ? 'Partida pausada'
-                          : 'Pronto para o scout?'}
-                      </Text>
-                      <Text color="whiteAlpha.700" fontSize="sm" mb={4}>
-                        {hasStarted && setsHistory.length > 0
-                          ? 'Defina o saque inicial e posicione os atletas em quadra'
-                          : hasStarted
-                          ? 'Reinicie para continuar registrando'
-                          : 'Configure o jogo e monte sua escalação'}
-                      </Text>
-                      <Button
-                        colorScheme="green"
-                        size="lg"
-                        fontWeight="bold"
-                        px={8}
-                        gap={2}
-                        onClick={() => setIsStartDialogOpen(true)}
-                        boxShadow="0 0 24px rgba(72, 187, 120, 0.5)"
-                        _hover={{
-                          transform: 'scale(1.05)',
-                          boxShadow: '0 0 32px rgba(72, 187, 120, 0.7)',
-                        }}
-                        transition="all 0.2s"
-                      >
-                        <Text as="span">▶</Text>
-                        {hasStarted && setsHistory.length > 0
-                          ? `Iniciar Set ${currentSet}`
-                          : hasStarted
-                          ? 'Reiniciar'
-                          : 'Começar Scout'}
-                      </Button>
-                    </Box>
-                  </Box>
-                )}
+                    Finalizar Set
+                  </Button>
+                  <Button
+                    size="sm"
+                    bg="red.900"
+                    color="red.300"
+                    borderWidth="1px"
+                    borderColor="red.800"
+                    _hover={{ bg: 'red.800', color: 'red.200' }}
+                    _active={{ bg: 'red.950' }}
+                    fontWeight="semibold"
+                    data-testid="btn-end-match"
+                    onClick={() => setIsEndMatchDialogOpen(true)}
+                    flexShrink={0}
+                    whiteSpace="nowrap"
+                  >
+                    Finalizar Partida
+                  </Button>
+                </>
+              )}
+            </Flex>
+          </Flex>
 
-              </Box>
+          {/* LAYOUT 3 COLUNAS */}
+          <Flex flex="1" overflow="hidden">
+
+            {/* LEFT: RallyFlow + Histórico de pontos */}
+            <Flex
+              w="240px"
+              flexShrink={0}
+              direction="column"
+              gap={3}
+              p={3}
+              bg="gray.900"
+              borderRightWidth="1px"
+              borderRightColor="blue.900"
+              overflowY="auto"
+            >
               <RallyFlow
                 rallyState={rallyState}
                 onRemoveAction={(index) => {
@@ -1882,147 +1903,348 @@ export default function ScoutPage() {
                   }
                 }}
               />
-            </Box>
-
-            {/* Sidebar: Placar + Histórico */}
-            <Box
-              display="flex"
-              flexDirection="column"
-              gap={4}
-              minW={{ base: '100%', lg: '320px' }}
-              maxW={{ base: '100%', lg: '340px' }}
-              position={{ base: 'relative', lg: 'sticky' }}
-              top={{ lg: '20px' }}
-              h="fit-content"
-              zIndex={10}
-            >
-              <Scoreboard
-                homeTeamName={homeTeamName}
-                opponentName={opponentName}
-                score={score}
-                currentSet={currentSet}
-                totalSets={totalSets}
-                isLive={gameStarted}
-                servingTeam={gameStarted ? servingTeam : undefined}
-              />
+              <Box h="1px" bg="gray.700" flexShrink={0} />
               <PointHistoryList
                 history={history}
                 currentSet={currentSet}
                 onPointClick={(point) => setSelectedPointId(point.id)}
+                direction="vertical"
               />
+            </Flex>
+
+            {/* CENTER: Quadra */}
+            <Box flex="1" bg="gray.900" position="relative" display="flex" alignItems="center" justifyContent="center">
+              <VolleyballCourt
+                onActionRegister={registerAction}
+                rotation={rotation}
+                courtPositions={courtPositions}
+                onPositionChange={handlePositionChange}
+                rallyState={rallyState}
+                gameStarted={gameStarted}
+                onSubstitution={substitutePlayer}
+                onUndo={handleUndoWithToast}
+                showTips={showTips}
+                enabledFundamentos={enabledFundamentos}
+                liberoId={liberoId || undefined}
+                onLiberoChange={setLiberoId}
+                gameConfig={gameConfig || undefined}
+                suppressInternalActionPanel
+                externalActionRef={courtActionRef}
+                onPlayerSelected={handleSidebarPlayerSelected}
+                onFundamentoChange={handleSidebarFundamentoChange}
+                onPendingZoneChange={handleSidebarPendingZoneChange}
+              />
+              {!gameStarted && !isLineupPhase && (
+                <Box
+                  position="absolute"
+                  inset={0}
+                  bg="blackAlpha.800"
+                  backdropFilter="blur(6px)"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  zIndex={50}
+                >
+                  <Box textAlign="center" px={8} maxW="340px">
+                    <Text
+                      color="white"
+                      fontSize="2xl"
+                      fontWeight="bold"
+                      letterSpacing="-0.02em"
+                      mb={2}
+                    >
+                      {hasStarted && setsHistory.length > 0
+                        ? `Set ${currentSet}`
+                        : hasStarted
+                        ? 'Partida pausada'
+                        : 'Pronto para o scout?'}
+                    </Text>
+                    <Text color="whiteAlpha.500" fontSize="sm" mb={6}>
+                      {hasStarted && setsHistory.length > 0
+                        ? 'Defina o saque inicial e posicione os atletas em quadra'
+                        : hasStarted
+                        ? 'Reinicie para continuar registrando'
+                        : 'Configure o jogo e monte sua escalação'}
+                    </Text>
+                    <Button
+                      colorScheme="green"
+                      size="lg"
+                      fontWeight="bold"
+                      px={8}
+                      gap={2}
+                      onClick={() => setIsStartDialogOpen(true)}
+                      boxShadow="0 0 24px rgba(72, 187, 120, 0.5)"
+                      _hover={{ transform: 'scale(1.05)', boxShadow: '0 0 32px rgba(72, 187, 120, 0.7)' }}
+                      transition="all 0.2s"
+                    >
+                      <Text as="span">▶</Text>
+                      {hasStarted && setsHistory.length > 0
+                        ? `Iniciar Set ${currentSet}`
+                        : hasStarted
+                        ? 'Reiniciar'
+                        : 'Começar Scout'}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
             </Box>
+
+            {/* RIGHT: ActionPanel persistente */}
+            <Flex
+              w="280px"
+              flexShrink={0}
+              direction="column"
+              bg="gray.800"
+              borderLeftWidth="1px"
+              borderLeftColor="blue.900"
+            >
+              <ActionPanel
+                selectedPlayer={sidebarSelectedPlayer || ''}
+                playerName={players.find(p => p.jerseyNumber.toString() === sidebarSelectedPlayer)?.name}
+                isIdle={!sidebarSelectedPlayer || !gameStarted}
+                isPendingZone={!!sidebarPendingZone}
+                pendingZoneAction={sidebarPendingZone?.action}
+                onActionComplete={handleSidebarActionComplete}
+                onClose={() => handleSidebarPlayerSelected(null, undefined, '')}
+                rallyState={rallyState}
+                selectedAction={sidebarFundamento}
+                onSelectedActionChange={handleSidebarFundamentoChange}
+                highlightedKey={null}
+                showTips={showTips}
+                enabledFundamentos={sidebarFilteredFundamentos}
+                serveType={sidebarServeType}
+                onServeTypeChange={setSidebarServeType}
+                onUndo={handleUndoWithToast}
+                canUndo={canUndo}
+              />
+            </Flex>
           </Flex>
 
-          <Modal
-            isOpen={isStartDialogOpen}
-            onClose={() => setIsStartDialogOpen(false)}
-            isCentered
-            size="lg"
-          >
-            <ModalOverlay bg="rgba(0, 0, 0, 0.8)" />
+          {/* Modais */}
+          <Modal isOpen={isStartDialogOpen} onClose={() => setIsStartDialogOpen(false)} isCentered size="md">
+            <ModalOverlay bg="blackAlpha.900" backdropFilter="blur(4px)" />
             <ModalContent
-              bg="gray.900"
-              borderColor="blue.700"
-              borderWidth="2px"
-              borderRadius="xl"
+              bg="gray.950"
+              borderWidth="1px"
+              borderColor="whiteAlpha.100"
+              borderRadius="2xl"
+              overflow="hidden"
+              shadow="0 25px 60px rgba(0,0,0,0.7)"
             >
-              <ModalHeader color="white" fontSize="xl" fontWeight="bold">
-                {hasStarted && setsHistory.length > 0 ? `Iniciar Set ${currentSet}` : 'Configuração inicial'}
-              </ModalHeader>
-              <ModalBody>
-                <Flex direction="column" gap={5}>
-                  <Box>
-                    <Text color="blue.200" fontSize="sm" mb={2}>
-                      Quem inicia sacando?
+              {/* Header com accent */}
+              <Box
+                px={6}
+                pt={6}
+                pb={4}
+                borderBottomWidth="1px"
+                borderBottomColor="whiteAlpha.50"
+              >
+                <Text
+                  fontSize="2xs"
+                  color="blue.500"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="0.15em"
+                  mb={1}
+                >
+                  {hasStarted && setsHistory.length > 0
+                    ? `Set ${currentSet} de ${totalSets || '?'}`
+                    : 'Configuração inicial'}
+                </Text>
+                <Text color="white" fontSize="xl" fontWeight="bold" letterSpacing="-0.02em">
+                  {hasStarted && setsHistory.length > 0
+                    ? 'Quem começa sacando?'
+                    : 'Como começa o jogo?'}
+                </Text>
+              </Box>
+
+              <Box px={6} py={5}>
+                {/* Saque — dois cards grandes */}
+                <Text
+                  fontSize="2xs"
+                  color="gray.500"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="0.12em"
+                  mb={3}
+                >
+                  Saque inicial
+                </Text>
+                <Flex gap={3} mb={6}>
+                  {/* Meu time */}
+                  <Box
+                    as="button"
+                    flex="1"
+                    py={4}
+                    borderRadius="xl"
+                    borderWidth="2px"
+                    borderColor={initialServer === 'home' ? 'blue.500' : 'whiteAlpha.100'}
+                    bg={initialServer === 'home' ? 'blue.900' : 'whiteAlpha.50'}
+                    cursor="pointer"
+                    transition="all 0.15s"
+                    _hover={{ borderColor: initialServer === 'home' ? 'blue.400' : 'whiteAlpha.200', bg: initialServer === 'home' ? 'blue.900' : 'whiteAlpha.100' }}
+                    onClick={() => handleInitialServerChange('home')}
+                    position="relative"
+                    overflow="hidden"
+                  >
+                    {initialServer === 'home' && (
+                      <Box
+                        position="absolute"
+                        top={0} left={0} right={0}
+                        h="2px"
+                        bg="blue.400"
+                      />
+                    )}
+                    <Text
+                      fontSize="xs"
+                      color={initialServer === 'home' ? 'blue.400' : 'gray.600'}
+                      fontWeight="bold"
+                      textTransform="uppercase"
+                      letterSpacing="0.1em"
+                      mb={1}
+                    >
+                      {initialServer === 'home' ? '● Selecionado' : '○'}
                     </Text>
-                    <Flex gap={3} wrap="wrap">
-                      <Button
-                        onClick={() => handleInitialServerChange('home')}
-                        bg={
-                          initialServer === 'home' ? 'blue.600' : 'gray.800'
-                        }
-                        color="white"
-                        _hover={{
-                          bg:
-                            initialServer === 'home'
-                              ? 'blue.500'
-                              : 'gray.700',
-                        }}
-                        aria-pressed={initialServer === 'home'}
-                      >
-                        Meu time
-                      </Button>
-                      <Button
-                        onClick={() => handleInitialServerChange('away')}
-                        bg={
-                          initialServer === 'away' ? 'blue.600' : 'gray.800'
-                        }
-                        color="white"
-                        _hover={{
-                          bg:
-                            initialServer === 'away'
-                              ? 'blue.500'
-                              : 'gray.700',
-                        }}
-                        aria-pressed={initialServer === 'away'}
-                      >
-                        Adversário
-                      </Button>
-                    </Flex>
+                    <Text
+                      fontSize="md"
+                      color={initialServer === 'home' ? 'white' : 'gray.400'}
+                      fontWeight="bold"
+                    >
+                      {homeTeamName}
+                    </Text>
                   </Box>
 
-                  <Box>
-                    <Text color="blue.200" fontSize="sm" mb={2}>
-                      Rotação inicial do seu time (P1-P6)
-                    </Text>
-                    <Select
-                      value={initialRotation}
-                      onChange={(e) => setInitialRotation(e.target.value)}
-                      bg="gray.800"
-                      borderColor="blue.700"
-                      borderWidth="1px"
-                      borderRadius="md"
-                      color="white"
+                  {/* Adversário */}
+                  <Box
+                    as="button"
+                    flex="1"
+                    py={4}
+                    borderRadius="xl"
+                    borderWidth="2px"
+                    borderColor={initialServer === 'away' ? 'orange.500' : 'whiteAlpha.100'}
+                    bg={initialServer === 'away' ? 'orange.950' : 'whiteAlpha.50'}
+                    cursor="pointer"
+                    transition="all 0.15s"
+                    _hover={{ borderColor: initialServer === 'away' ? 'orange.400' : 'whiteAlpha.200', bg: initialServer === 'away' ? 'orange.950' : 'whiteAlpha.100' }}
+                    onClick={() => handleInitialServerChange('away')}
+                    position="relative"
+                    overflow="hidden"
+                  >
+                    {initialServer === 'away' && (
+                      <Box
+                        position="absolute"
+                        top={0} left={0} right={0}
+                        h="2px"
+                        bg="orange.400"
+                      />
+                    )}
+                    <Text
+                      fontSize="xs"
+                      color={initialServer === 'away' ? 'orange.400' : 'gray.600'}
+                      fontWeight="bold"
+                      textTransform="uppercase"
+                      letterSpacing="0.1em"
+                      mb={1}
                     >
-                      {[1, 2, 3, 4, 5, 6].map((opt) => (
-                        <option key={opt} value={opt}>
-                          P{opt}
-                        </option>
-                      ))}
-                    </Select>
-                    <Text color="gray.400" fontSize="xs" mt={1}>
-                      {initialServer === 'home'
-                        ? 'Padrão: P1 (seu time está sacando)'
-                        : 'Padrão: P2 (adversário está sacando)'}
+                      {initialServer === 'away' ? '● Selecionado' : '○'}
+                    </Text>
+                    <Text
+                      fontSize="md"
+                      color={initialServer === 'away' ? 'orange.100' : 'gray.400'}
+                      fontWeight="bold"
+                    >
+                      {opponentName}
                     </Text>
                   </Box>
                 </Flex>
-              </ModalBody>
-              <ModalFooter display="flex" justifyContent="flex-end" gap={3}>
-                <Button
-                  variant="ghost"
-                  onClick={() => setIsStartDialogOpen(false)}
+
+                {/* Rotação — 6 tiles */}
+                <Text
+                  fontSize="2xs"
+                  color="gray.500"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="0.12em"
+                  mb={3}
                 >
-                  Cancelar
-                </Button>
-                <Button
-                  colorScheme="green"
-                  data-testid="btn-confirm-start"
-                  onClick={handleConfirmConfig}
-                  disabled={isStartConfirmDisabled}
-                >
-                  Confirmar
-                </Button>
-              </ModalFooter>
+                  Rotação inicial
+                </Text>
+                <Flex gap={2} mb={2}>
+                  {[1, 2, 3, 4, 5, 6].map((pos) => {
+                    const isSelected = initialRotation === String(pos)
+                    return (
+                      <Box
+                        key={pos}
+                        as="button"
+                        flex="1"
+                        py={3}
+                        borderRadius="lg"
+                        borderWidth="1px"
+                        borderColor={isSelected ? 'blue.500' : 'whiteAlpha.100'}
+                        bg={isSelected ? 'blue.800' : 'whiteAlpha.50'}
+                        cursor="pointer"
+                        transition="all 0.12s"
+                        _hover={{ borderColor: 'blue.600', bg: isSelected ? 'blue.700' : 'whiteAlpha.100' }}
+                        onClick={() => setInitialRotation(String(pos))}
+                      >
+                        <Text
+                          fontSize="xs"
+                          color="gray.600"
+                          fontWeight="medium"
+                          lineHeight="1"
+                          mb="2px"
+                        >
+                          P
+                        </Text>
+                        <Text
+                          fontSize="lg"
+                          color={isSelected ? 'white' : 'gray.500'}
+                          fontWeight="black"
+                          lineHeight="1"
+                        >
+                          {pos}
+                        </Text>
+                      </Box>
+                    )
+                  })}
+                </Flex>
+                <Text color="gray.700" fontSize="2xs" mb={6}>
+                  {initialServer === 'home'
+                    ? 'Pn = levantador está na zona n. Em P1, o levantador está na zona de saque (fundo direito).'
+                    : 'Pn = levantador está na zona n. P2 é comum ao receber: ao marcar o primeiro ponto, o levantador rotaciona para a zona 1 e saca.'}
+                </Text>
+
+                {/* Confirmar */}
+                <Flex gap={3}>
+                  <Button
+                    variant="ghost"
+                    color="gray.600"
+                    _hover={{ color: 'gray.400', bg: 'whiteAlpha.50' }}
+                    onClick={() => setIsStartDialogOpen(false)}
+                    size="md"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    flex="1"
+                    colorScheme="green"
+                    size="md"
+                    fontWeight="bold"
+                    data-testid="btn-confirm-start"
+                    onClick={handleConfirmConfig}
+                    isDisabled={isStartConfirmDisabled}
+                    borderRadius="lg"
+                    boxShadow={!isStartConfirmDisabled ? '0 0 20px rgba(72,187,120,0.25)' : 'none'}
+                    transition="all 0.2s"
+                  >
+                    Confirmar e montar escalação
+                  </Button>
+                </Flex>
+              </Box>
             </ModalContent>
           </Modal>
 
-          {/* Modal Finalizar Set */}
-          <Modal
-            isOpen={isEndSetDialogOpen}
-            onClose={() => setIsEndSetDialogOpen(false)}
-            isCentered
-          >
+          <Modal isOpen={isEndSetDialogOpen} onClose={() => setIsEndSetDialogOpen(false)} isCentered>
             <ModalOverlay bg="rgba(0, 0, 0, 0.8)" />
             <ModalContent bg="gray.900" borderColor="blue.700" borderWidth="2px" borderRadius="xl">
               <ModalHeader color="white">Finalizar Set {currentSet}?</ModalHeader>
@@ -2055,48 +2277,34 @@ export default function ScoutPage() {
                 )}
               </ModalBody>
               <ModalFooter gap={3}>
-                <Button variant="ghost" onClick={() => setIsEndSetDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button colorScheme="blue" onClick={handleEndSet}>
-                  Confirmar
-                </Button>
+                <Button variant="ghost" onClick={() => setIsEndSetDialogOpen(false)}>Cancelar</Button>
+                <Button colorScheme="blue" onClick={handleEndSet}>Confirmar</Button>
               </ModalFooter>
             </ModalContent>
           </Modal>
 
-          {/* Modal Finalizar Partida */}
           <Modal
             isOpen={isEndMatchDialogOpen}
-            onClose={() => {
-              setIsEndMatchDialogOpen(false)
-              setEndMatchConfirmed(false)
-            }}
+            onClose={() => { setIsEndMatchDialogOpen(false); setEndMatchConfirmed(false) }}
             isCentered
           >
             <ModalOverlay bg="rgba(0, 0, 0, 0.8)" />
             <ModalContent bg="gray.900" borderColor="red.700" borderWidth="2px" borderRadius="xl">
               <ModalHeader color="white">Encerrar Partida?</ModalHeader>
               <ModalBody>
-                <Text color="gray.300" mb={4}>
-                  Todos os dados serão salvos e o scout será encerrado.
-                </Text>
+                <Text color="gray.300" mb={4}>Todos os dados serão salvos e o scout será encerrado.</Text>
                 <Box bg="gray.800" p={4} borderRadius="md" mb={4}>
                   <Text color="gray.400" fontSize="sm" mb={2}>Resumo da partida:</Text>
                   {setsHistory.map((s) => (
                     <Flex key={s.number} justify="space-between" mb={1}>
                       <Text color="gray.300" fontSize="sm">Set {s.number}</Text>
-                      <Text color="white" fontSize="sm" fontWeight="bold">
-                        {s.homeScore} x {s.awayScore}
-                      </Text>
+                      <Text color="white" fontSize="sm" fontWeight="bold">{s.homeScore} x {s.awayScore}</Text>
                     </Flex>
                   ))}
                   {(score.home > 0 || score.away > 0) && (
                     <Flex justify="space-between" mb={1}>
                       <Text color="yellow.300" fontSize="sm">Set {currentSet} (atual)</Text>
-                      <Text color="yellow.300" fontSize="sm" fontWeight="bold">
-                        {score.home} x {score.away}
-                      </Text>
+                      <Text color="yellow.300" fontSize="sm" fontWeight="bold">{score.home} x {score.away}</Text>
                     </Flex>
                   )}
                   <Box borderTopWidth="1px" borderColor="gray.700" mt={2} pt={2}>
@@ -2106,33 +2314,18 @@ export default function ScoutPage() {
                     </Flex>
                   </Box>
                 </Box>
-                <Box
-                  mt={3}
-                  p={3}
-                  borderRadius="md"
-                  bg="red.950"
-                  borderWidth="1px"
-                  borderColor="red.800"
-                >
+                <Box mt={3} p={3} borderRadius="md" bg="red.950" borderWidth="1px" borderColor="red.800">
                   <Checkbox
                     isChecked={endMatchConfirmed}
                     onChange={(e) => setEndMatchConfirmed(e.target.checked)}
                     colorScheme="red"
                   >
-                    <Text color="red.300" fontSize="sm">
-                      Confirmo que desejo encerrar esta partida
-                    </Text>
+                    <Text color="red.300" fontSize="sm">Confirmo que desejo encerrar esta partida</Text>
                   </Checkbox>
                 </Box>
               </ModalBody>
               <ModalFooter gap={3}>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setIsEndMatchDialogOpen(false)
-                    setEndMatchConfirmed(false)
-                  }}
-                >
+                <Button variant="ghost" onClick={() => { setIsEndMatchDialogOpen(false); setEndMatchConfirmed(false) }}>
                   Cancelar
                 </Button>
                 <Button
@@ -2147,99 +2340,6 @@ export default function ScoutPage() {
               </ModalFooter>
             </ModalContent>
           </Modal>
-
-          {/* Footer com os Atletas */}
-          <Box
-            bg="gray.800"
-            borderTop="1px"
-            borderColor="gray.700"
-            py={{ base: 3, md: 4 }}
-            px={{ base: 3, md: 6 }}
-            borderRadius={{ base: 'lg', md: 'xl' }}
-            boxShadow="0 -8px 24px rgba(0,0,0,0.35)"
-            position={{ base: 'relative', xl: 'sticky' }}
-            bottom="auto"
-            mt={4}
-          >
-            <Flex
-              maxW="1200px"
-              mx="auto"
-              gap={3}
-              overflowX="auto"
-              align="stretch"
-              css={{
-                '&::-webkit-scrollbar': {
-                  height: '8px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'rgba(0,0,0,0.1)',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: 'rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                },
-              }}
-            >
-              {selectedPlayers.map((id) => {
-                const player = players.find((p) => p.id === id)
-                if (!player) return null
-                const isOnCourt = courtPlayerIds.has(player.id)
-                return (
-                  <Box
-                    key={player.id}
-                    minW={{ base: '110px', md: '120px' }}
-                    maxW={{ base: '110px', md: '120px' }}
-                    bg={isOnCourt ? 'gray.700' : 'gray.800'}
-                    borderRadius="md"
-                    borderWidth="1px"
-                    borderColor={isOnCourt ? 'blue.500' : 'gray.700'}
-                    p={3}
-                    textAlign="center"
-                    position="relative"
-                    cursor="default"
-                    transition="all 0.2s"
-                    display="flex"
-                    flexDirection="column"
-                    alignItems="center"
-                    justifyContent="flex-start"
-                    opacity={isOnCourt ? 1 : 0.5}
-                  >
-                    <Box
-                      h="56px"
-                      w="56px"
-                      borderRadius="full"
-                      overflow="hidden"
-                      position="relative"
-                      mx="auto"
-                      mb={3}
-                    >
-                      {player.photo && (
-                        <Image
-                          src={player.photo}
-                          alt={player.name}
-                          fill
-                          style={{ objectFit: 'cover' }}
-                          sizes="(max-width: 120px) 100vw, 120px"
-                        />
-                      )}
-                    </Box>
-                    <Text
-                      color="white"
-                      fontWeight="bold"
-                      fontSize="sm"
-                      noOfLines={1}
-                      mb={1}
-                    >
-                      {player.name}
-                    </Text>
-                    <Badge colorScheme="blue" fontSize="xs">
-                      #{player.jerseyNumber}
-                    </Badge>
-                  </Box>
-                )
-              })}
-            </Flex>
-          </Box>
 
           <LineupModal
             isOpen={showLineupModal}
@@ -2269,7 +2369,7 @@ export default function ScoutPage() {
               editHistoryAction(pointId, actionIndex, newSubAction)
             }}
           />
-        </>
+        </Box>
       )}
     </Box>
   )

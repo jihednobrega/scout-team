@@ -9,6 +9,8 @@ import { ScoutAction, ActionType } from '@/types/scout'
 import AttackHeatmap from '@/components/statistics/AttackHeatmap'
 import ServeHeatmap from '@/components/statistics/ServeHeatmap'
 import { PlayerCardLink } from '@/components/portal/PlayerCardLink'
+import AIInsightCard from '@/components/ai/AIInsightCard'
+import AIStreamingPanel from '@/components/ai/AIStreamingPanel'
 
 // ─── design tokens ────────────────────────────────────────────────────────────
 const BG        = '#080810'
@@ -128,7 +130,7 @@ export default async function TreinadorPartidaPage({
   const matchEffAtk = eff(allAtk)
   const matchEffRec = eff(allRec)
   const matchAces   = allSrv.filter((a) => a.subAction === 'ace').length
-  const matchKills  = allAtk.filter((a) => a.subAction === 'kill').length
+  const matchKills  = allAtk.filter((a) => a.subAction === 'kill' || a.subAction === 'tip' || a.subAction === 'block_out').length
 
   const attackers = playerRows.filter((p) => p.hasAttacks)
   const servers   = playerRows.filter((p) => p.hasServes)
@@ -409,6 +411,20 @@ export default async function TreinadorPartidaPage({
             </Text>
           </Box>
         )}
+
+        <AIStreamingPanel
+          type="tactical_brief"
+          teamId={session.teamId}
+          matchId={matchId}
+          label="Briefing Tático com IA"
+        />
+
+        <AIInsightCard
+          type="match_summary"
+          teamId={session.teamId}
+          matchId={matchId}
+          accent={ACCENT}
+        />
       </VStack>
     </Box>
   )

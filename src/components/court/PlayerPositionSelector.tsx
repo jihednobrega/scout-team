@@ -76,10 +76,11 @@ export default function PlayerPositionSelector({
   rotation,
   onSelectPlayer,
 }: PlayerPositionSelectorProps) {
-  const logicalPos = getLogicalPosition(position, rotation)
-  const preferredRole = getRoleForLogicalPosition(logicalPos)
-  const zoneLabel = getZoneLabel(position)
-  const roleLabel = preferredRole.charAt(0).toUpperCase() + preferredRole.slice(1)
+  const isLiberoSlot = position === 7
+  const logicalPos = isLiberoSlot ? 0 : getLogicalPosition(position, rotation)
+  const preferredRole = isLiberoSlot ? 'libero' : getRoleForLogicalPosition(logicalPos)
+  const zoneLabel = isLiberoSlot ? 'Slot do Líbero' : getZoneLabel(position)
+  const roleLabel = isLiberoSlot ? 'Líbero' : preferredRole.charAt(0).toUpperCase() + preferredRole.slice(1)
 
   // Separar jogadores por prioridade
   const priorityPlayers = players.filter((p) => p.position === preferredRole)

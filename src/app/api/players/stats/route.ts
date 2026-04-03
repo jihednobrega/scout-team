@@ -13,9 +13,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'teamId é obrigatório' }, { status: 400 })
     }
 
-    // Buscar todas as partidas da equipe com suas ações
+    // Buscar todas as partidas finalizadas da equipe com suas ações
     const matches = await prisma.match.findMany({
-      where: { teamId },
+      where: { teamId, status: 'finalized' },
       include: {
         actions: {
           select: {

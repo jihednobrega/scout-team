@@ -11,6 +11,7 @@ import {
 import { ScoutAction, ActionType } from '@/types/scout'
 import AttackHeatmap from '@/components/statistics/AttackHeatmap'
 import ServeHeatmap from '@/components/statistics/ServeHeatmap'
+import AIInsightCard from '@/components/ai/AIInsightCard'
 
 // ─── design tokens (iguais ao portal/atleta/page.tsx) ────────────────────────
 const BG       = '#080810'
@@ -419,6 +420,19 @@ export default async function PartidaDetailPage({
               style={{ color: 'rgba(255,255,255,0.25)', fontFamily: FONT_BODY }}>
               Nenhuma ação registrada para você nesta partida
             </Text>
+          </Box>
+        )}
+
+        {/* Reflexão pós-jogo IA */}
+        {session.playerId && (
+          <Box w="full">
+            <AIInsightCard
+              type="post_game_reflection"
+              teamId={session.teamId}
+              matchId={matchId}
+              playerId={session.playerId}
+              accent="#22D3EE"
+            />
           </Box>
         )}
 

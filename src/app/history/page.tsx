@@ -69,6 +69,7 @@ export default function HistoryPage() {
     e.stopPropagation()
     if (confirm(`Deletar a partida contra ${opponent}?`)) {
       await deleteMatchAPI(gameId)
+      router.refresh()
     }
   }
 

@@ -286,13 +286,8 @@ export function useMatchPersistence({
       // 3. Calcular estatísticas
       const stats = computeStats(actions)
 
-      // 4. Calcular duração (diferença entre primeira e última ação)
-      let duration: number | null = null
-      if (actions.length >= 2) {
-        const first = new Date(actions[0].timestamp).getTime()
-        const last = new Date(actions[actions.length - 1].timestamp).getTime()
-        duration = Math.round((last - first) / 60000) // minutos
-      }
+      // Duração não é calculada — scout é feito em vídeo, não ao vivo
+      const duration: number | null = null
 
       // 5. Atualizar partida no banco
       const res = await fetch(`/api/matches/${matchId}`, {

@@ -12,9 +12,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'teamId é obrigatório' }, { status: 400 })
     }
 
-    // Buscar todas as partidas da equipe
+    // Buscar todas as partidas finalizadas da equipe
     const matches = await prisma.match.findMany({
-      where: { teamId },
+      where: { teamId, status: 'finalized' },
       include: {
         actions: {
           select: {
@@ -304,7 +304,7 @@ export async function GET(request: Request) {
 
           if (action.action === 'attack') {
             stat.atkTotal++
-            if (action.subAction === 'kill') stat.atkKills++
+            if (action.subAction === 'kill' || action.subAction === 'tip' || action.subAction === 'block_out') stat.atkKills++
             if (action.subAction === 'error') stat.atkErrors++
             if (action.subAction === 'blocked') stat.atkBlocked++
           } else if (action.action === 'reception') {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Box,
   Flex,
@@ -10,6 +10,11 @@ import {
   Button,
   Spinner,
   Badge,
+  Icon,
+  useDisclosure,
+  Drawer, DrawerOverlay, DrawerContent, DrawerHeader, DrawerBody, DrawerCloseButton,
+  AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogContent, AlertDialogOverlay,
 } from '@chakra-ui/react'
 import { PlayerStatistics, StatisticsFilters } from '@/types/statistics'
 import { usePlayersAPI } from '@/hooks/usePlayersAPI'
@@ -21,6 +26,8 @@ import AttackHeatmap from '@/components/statistics/AttackHeatmap'
 import ServeHeatmap from '@/components/statistics/ServeHeatmap'
 import KPICards from '@/components/statistics/KPICards'
 import { MdInsights, MdGridOn, MdMap, MdTableChart } from 'react-icons/md'
+import { IoSparkles } from 'react-icons/io5'
+import AIStreamingPanel from '@/components/ai/AIStreamingPanel'
 
 interface RotationStat {
   rotation: number
@@ -74,6 +81,41 @@ export default function StatisticsPage() {
   const [loading, setLoading] = useState(true)
   const [apiData, setApiData] = useState<APIStats | null>(null)
   const [hasRealData, setHasRealData] = useState(false)
+  const [hasCachedInsight, setHasCachedInsight] = useState(false)
+  const [autoGenerate, setAutoGenerate] = useState(false)
+  const [drawerKey, setDrawerKey] = useState(0)
+  const { isOpen: isDrawerOpen, onOpen: onDrawerOpen, onClose: onDrawerClose } = useDisclosure()
+  const { isOpen: isConfirmOpen, onOpen: onConfirmOpen, onClose: onConfirmClose } = useDisclosure()
+  const confirmCancelRef = useRef<HTMLButtonElement>(null)
+
+  // Verificar cache do insight de lineup_opt
+  useEffect(() => {
+    if (!selectedTeamId) return
+    const params = new URLSearchParams({ type: 'stats_overview', teamId: selectedTeamId })
+    fetch(`/api/ai/insights?${params}`)
+      .then(r => r.json())
+      .then(data => setHasCachedInsight(!!data.found))
+      .catch(() => {})
+  }, [selectedTeamId])
+
+  const handleOpenAI = () => {
+    if (!selectedTeamId) return
+    if (hasCachedInsight) {
+      setAutoGenerate(false)
+      setDrawerKey(k => k + 1)
+      onDrawerOpen()
+    } else {
+      onConfirmOpen()
+    }
+  }
+
+  const handleConfirmGenerate = () => {
+    onConfirmClose()
+    setAutoGenerate(true)
+    setDrawerKey(k => k + 1)
+    setHasCachedInsight(true)
+    onDrawerOpen()
+  }
 
   // Buscar dados reais da API
   useEffect(() => {
@@ -151,14 +193,7 @@ export default function StatisticsPage() {
             <Heading color="white" size={{ base: 'lg', md: 'xl' }} letterSpacing="-0.02em">
               Estatísticas da Equipe
             </Heading>
-            <Badge
-              colorScheme="green"
-              variant="subtle"
-              fontSize="xs"
-              px={2}
-              py={0.5}
-              borderRadius="full"
-            >
+            <Badge colorScheme="green" variant="subtle" fontSize="xs" px={2} py={0.5} borderRadius="full">
               {kpis.matchesPlayed} {kpis.matchesPlayed === 1 ? 'partida' : 'partidas'}
             </Badge>
           </Flex>
@@ -166,6 +201,15 @@ export default function StatisticsPage() {
             {selectedTeam?.name || 'Equipe'} — Dados agregados de todas as partidas
           </Text>
         </Box>
+        <Button
+          leftIcon={<Icon as={IoSparkles} />}
+          colorScheme="purple"
+          variant={hasCachedInsight ? 'solid' : 'outline'}
+          size="md"
+          onClick={handleOpenAI}
+        >
+          {hasCachedInsight ? 'Ver análise IA' : 'Analisar com IA'}
+        </Button>
       </Flex>
 
       {/* KPI Cards */}
@@ -246,6 +290,63 @@ export default function StatisticsPage() {
           onFilterChange={setFilters}
         />
       )}
+
+      {/* Drawer — Análise com IA */}
+      <Drawer isOpen={isDrawerOpen} placement="right" onClose={onDrawerClose} size="lg">
+        <DrawerOverlay />
+        <DrawerContent bg="gray.900" borderLeftWidth="1px" borderColor="gray.700">
+          <DrawerCloseButton color="gray.400" />
+          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" pb={4}>
+            <Flex align="center" gap={3}>
+              <Icon as={IoSparkles} color="purple.400" boxSize={5} />
+              <Box>
+                <Text color="white" fontWeight="700" fontSize="lg">Análise Completa da Equipe</Text>
+                <Text color="gray.400" fontSize="xs" fontWeight="normal">
+                  {selectedTeam?.name} — análise baseada em todas as partidas
+                </Text>
+              </Box>
+              <Badge colorScheme="purple" variant="subtle" ml="auto" mr={8}>Claude</Badge>
+            </Flex>
+          </DrawerHeader>
+          <DrawerBody py={5}>
+            {selectedTeamId && (
+              <AIStreamingPanel
+                key={drawerKey}
+                type="stats_overview"
+                teamId={selectedTeamId}
+                embedded
+                autoGenerate={autoGenerate}
+              />
+            )}
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+
+      {/* AlertDialog — Confirmação */}
+      <AlertDialog isOpen={isConfirmOpen} leastDestructiveRef={confirmCancelRef} onClose={onConfirmClose} isCentered>
+        <AlertDialogOverlay>
+          <AlertDialogContent bg="gray.800" borderWidth="1px" borderColor="gray.700">
+            <AlertDialogHeader color="white" fontSize="lg" fontWeight="bold">
+              <Flex align="center" gap={2}>
+                <Icon as={IoSparkles} color="purple.400" />
+                Gerar análise com IA?
+              </Flex>
+            </AlertDialogHeader>
+            <AlertDialogBody color="gray.300" fontSize="sm">
+              O Claude vai analisar KPIs, desempenho individual, estratégia ofensiva e defensiva, distribuição do levantador e todas as rotações para gerar um relatório tático completo.
+              O resultado ficará salvo para consultas futuras.
+            </AlertDialogBody>
+            <AlertDialogFooter gap={3}>
+              <Button ref={confirmCancelRef} variant="ghost" colorScheme="gray" onClick={onConfirmClose}>
+                Cancelar
+              </Button>
+              <Button colorScheme="purple" leftIcon={<Icon as={IoSparkles} />} onClick={handleConfirmGenerate}>
+                Gerar análise
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </>
   )
 }

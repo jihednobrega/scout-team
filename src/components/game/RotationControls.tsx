@@ -1,4 +1,4 @@
-import { Box, Text, Flex, IconButton, Icon } from '@chakra-ui/react'
+import { Text, Flex, IconButton, Icon } from '@chakra-ui/react'
 
 interface RotationControlsProps {
   rotation: number
@@ -14,41 +14,62 @@ export default function RotationControls({
   canEdit = false,
 }: RotationControlsProps) {
   return (
-    <Box>
-      <Text
-        color="blue.300"
-        fontSize="xs"
-        textTransform="uppercase"
-        letterSpacing="0.08em"
-        mb={1}
-      >
-        Rotação
-      </Text>
-      <Flex align="center" gap={2}>
-        {canEdit && onPrevious && (
-          <IconButton
-            aria-label="Rotação anterior"
-            icon={<Icon viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></Icon>}
-            size="xs"
-            variant="ghost"
-            color="blue.300"
-            onClick={onPrevious}
-          />
-        )}
-        <Text color="white" fontSize="lg" fontWeight="bold">
-          P{rotation}
+    <Flex
+      align="center"
+      gap={1}
+      px={2.5}
+      h="8"
+      borderRadius="md"
+      bg="gray.800"
+      borderWidth="1px"
+      borderColor="gray.700"
+      flexShrink={0}
+    >
+      {canEdit && onPrevious && (
+        <IconButton
+          aria-label="Rotação anterior"
+          icon={<Icon viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></Icon>}
+          size="xs"
+          variant="ghost"
+          color="gray.500"
+          minW="auto"
+          h="auto"
+          _hover={{ color: 'white' }}
+          onClick={onPrevious}
+        />
+      )}
+      <Flex align="baseline" gap="2px">
+        <Text
+          fontSize="md"
+          color="white"
+          fontWeight="bold"
+          letterSpacing="0.1em"
+          lineHeight="1"
+        >
+          P
         </Text>
-        {canEdit && onNext && (
-          <IconButton
-            aria-label="Próxima rotação"
-            icon={<Icon viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></Icon>}
-            size="xs"
-            variant="ghost"
-            color="blue.300"
-            onClick={onNext}
-          />
-        )}
+        <Text
+          color="white"
+          fontSize="md"
+          fontWeight="black"
+          lineHeight="1"
+        >
+          {rotation}
+        </Text>
       </Flex>
-    </Box>
+      {canEdit && onNext && (
+        <IconButton
+          aria-label="Próxima rotação"
+          icon={<Icon viewBox="0 0 24 24"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></Icon>}
+          size="xs"
+          variant="ghost"
+          color="gray.500"
+          minW="auto"
+          h="auto"
+          _hover={{ color: 'white' }}
+          onClick={onNext}
+        />
+      )}
+    </Flex>
   )
 }

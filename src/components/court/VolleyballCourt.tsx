@@ -1,10 +1,10 @@
 // app/components/court/VolleyballCourt.tsx
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { getFormationOffsetByLineup, getFormationOffset, FormationMode } from '@/lib/formationOffsets'
-import { Box, Image, Text, Button, Grid, useToast } from '@chakra-ui/react'
+import { Box, Flex, Image, Text, Button, Grid, useToast } from '@chakra-ui/react'
 import { ScoutAction, GameConfig, RallyState, RallyStep, ServingTeam, ServeType } from '@/types/scout'
 import { Player, VolleyballPosition } from '@/types/player'
 import { usePlayersAPI } from '@/hooks/usePlayersAPI'
@@ -32,6 +32,12 @@ interface VolleyballCourtProps {
   liberoId?: string
   onLiberoChange?: (id: string) => void
   gameConfig?: GameConfig
+  // Props para painel externo persistente
+  suppressInternalActionPanel?: boolean
+  externalActionRef?: { current: ((action: string, subAction: string, zone?: number, serveType?: ServeType) => void) | null }
+  onPlayerSelected?: (jersey: string | null, fundamentos: string[] | undefined, fundamento: string) => void
+  onFundamentoChange?: (f: string) => void
+  onPendingZoneChange?: (isPending: boolean, actionName?: string) => void
 }
 
 export default function VolleyballCourt({
@@ -50,6 +56,11 @@ export default function VolleyballCourt({
   liberoId,
   onLiberoChange,
   gameConfig,
+  suppressInternalActionPanel,
+  externalActionRef,
+  onPlayerSelected,
+  onFundamentoChange,
+  onPendingZoneChange,
 }: VolleyballCourtProps) {
   const { selectedTeamId } = useTeamContext()
   const { players } = usePlayersAPI(selectedTeamId)
@@ -92,10 +103,18 @@ export default function VolleyballCourt({
     })
   }
 
+  // Latest-ref: mantém externalActionRef apontando para handleActionComplete atualizado a cada render
+  // (atribuição ocorre depois de handleActionComplete ser declarado — ver abaixo)
+
   // Estado controlado do fundamento selecionado no ActionPanel
   const [actionPanelFundamento, setActionPanelFundamento] = useState<string>(
     inferFundamento(rallyState, enabledFundamentos)
   )
+
+  // Notifica o pai quando fundamento muda (teclado ou clique interno)
+  useEffect(() => {
+    onFundamentoChange?.(actionPanelFundamento)
+  }, [actionPanelFundamento])
 
   // Fundamentos filtrados por posição do jogador (ex: linha de trás não pode bloquear)
   const [playerFilteredFundamentos, setPlayerFilteredFundamentos] = useState<string[] | undefined>(enabledFundamentos)
@@ -192,9 +211,11 @@ export default function VolleyballCourt({
       : enabledFundamentos
     setPlayerFilteredFundamentos(filtered)
 
-    setActionPanelFundamento(inferFundamento(rallyState, filtered))
+    const inferredFundamento = inferFundamento(rallyState, filtered)
+    setActionPanelFundamento(inferredFundamento)
     setShowActionPanel(true)
     setPendingAction(null)
+    onPlayerSelected?.(player.jerseyNumber.toString(), filtered, inferredFundamento)
   }
 
   const handleActionComplete = (action: string, subAction: string, zone?: number, actionServeType?: ServeType) => {
@@ -272,9 +293,19 @@ export default function VolleyballCourt({
       return
     }
 
+    const ACTION_LABELS: Record<string, string> = {
+      serve: 'Saque', attack: 'Ataque', reception: 'Recepção',
+      block: 'Bloqueio', dig: 'Defesa', set: 'Levantamento',
+    }
     setPendingAction({ action, subAction, serveType: actionServeType })
     // Fechar drawer para liberar a visão da quadra — o indicador "aguardando zona" aparece
     setShowActionPanel(false)
+    onPendingZoneChange?.(true, ACTION_LABELS[action] || action)
+  }
+
+  // Latest-ref: mantém externalActionRef sincronizado com handleActionComplete a cada render
+  if (externalActionRef) {
+    externalActionRef.current = handleActionComplete
   }
 
   const handleOpponentError = () => {
@@ -389,12 +420,16 @@ export default function VolleyballCourt({
     setSelectedPlayer(null)
     setShowActionPanel(false)
     setPendingAction(null)
+    onPlayerSelected?.(null, undefined, '')
+    onPendingZoneChange?.(false)
   }
 
   const closePanel = () => {
     setShowActionPanel(false)
     setSelectedPlayer(null)
     setPendingAction(null)
+    onPlayerSelected?.(null, undefined, '')
+    onPendingZoneChange?.(false)
   }
 
   // Selecionar jogador por zona via teclado (teclas 1-6)
@@ -489,20 +524,62 @@ export default function VolleyballCourt({
         <Box
           bg="gray.800"
           borderRadius={{ base: 'xl', sm: '2xl' }}
-          p={{ base: 3, sm: 4, lg: 5, xl: 6 }}
           borderWidth="1px"
           borderColor="blue.500/30"
           shadow="2xl"
           maxW={{ base: '100%' }}
           mx="auto"
+          display="flex"
+          flexDirection="column"
         >
+          {/* Strip: Adversário */}
+          <Flex
+            align="center"
+            justify="space-between"
+            px={4}
+            py={2}
+            borderBottomWidth="1px"
+            borderBottomColor="whiteAlpha.100"
+            bg="rgba(251, 146, 60, 0.06)"
+            flexShrink={0}
+            borderTopRadius={{ base: 'xl', sm: '2xl' }}
+          >
+            <Flex align="center" gap={2}>
+              <Box w="5px" h="5px" borderRadius="full" bg="orange.500" flexShrink={0} />
+              <Text
+                color="orange.400"
+                fontSize="xs"
+                fontWeight="bold"
+                textTransform="uppercase"
+                letterSpacing="0.12em"
+              >
+                {gameConfig?.opponentName || 'Adversário'}
+              </Text>
+            </Flex>
+            <Button
+              size="xs"
+              colorScheme="red"
+              variant="solid"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleOpponentError()
+              }}
+              isDisabled={!gameStarted || !isLineupComplete || (rallyState.servingTeam === 'home' && rallyState.currentStep === 'serve')}
+              data-testid="btn-opponent-error"
+              _disabled={{ opacity: 0.35, cursor: 'not-allowed', bg: 'gray.600' }}
+              fontWeight="bold"
+              letterSpacing="0.04em"
+            >
+              Erro Adversário
+            </Button>
+          </Flex>
+
           <Box
             w="full"
             h="full"
             position="relative"
             ref={courtRef}
             className="volleyball-court"
-            borderRadius={{ base: 'lg', sm: 'xl' }}
             borderWidth="4px"
             borderColor="white"
             cursor="crosshair"
@@ -547,87 +624,6 @@ export default function VolleyballCourt({
               boxShadow="0 0 10px rgba(255,255,255,0.5)"
             />
 
-            {/* Botão de Erro do Adversário - Movido para o topo da quadra adversária */}
-            <Button
-              position="absolute"
-              top="-40px"
-              left="25%"
-              transform="translateX(-50%)"
-              size="sm"
-              colorScheme="red"
-              variant="solid"
-              zIndex={40}
-              onClick={(e) => {
-                e.stopPropagation()
-                handleOpponentError()
-              }}
-              isDisabled={!gameStarted || !isLineupComplete || (rallyState.servingTeam === 'home' && rallyState.currentStep === 'serve')}
-              boxShadow="md"
-              borderWidth="1px"
-              borderColor="white"
-              _disabled={{
-                opacity: 0.5,
-                cursor: 'not-allowed',
-                bg: 'gray.500'
-              }}
-              data-testid="btn-opponent-error"
-            >
-              Erro Adversário
-            </Button>
-
-            {/* Botão de Substituição - Placeholder no topo do seu time */}
-            <Button
-              position="absolute"
-              top="-40px"
-              right="25%"
-              transform="translateX(50%)"
-              size="sm"
-              colorScheme="yellow"
-              variant="solid"
-              zIndex={40}
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowSubModal(true)
-              }}
-              isDisabled={!gameStarted}
-              boxShadow="md"
-              borderWidth="1px"
-              borderColor="white"
-              _disabled={{
-                opacity: 0.5,
-                cursor: 'not-allowed',
-                bg: 'gray.500'
-              }}
-            >
-              Substituição
-            </Button>
-
-            {/* Labels dos times */}
-            <Box
-              position="absolute"
-              top="2%"
-              left="2%"
-              color="orange.400"
-              fontSize={{ base: 'sm', md: 'md', lg: 'lg' }}
-              fontWeight="bold"
-              textShadow="2px 2px 4px rgba(0,0,0,0.7)"
-              zIndex={30}
-              pointerEvents="none"
-            >
-              {gameConfig?.opponentName || 'Time Adversário'}
-            </Box>
-            <Box
-              position="absolute"
-              bottom="2%"
-              right="2%"
-              color="blue.400"
-              fontSize={{ base: 'sm', md: 'md', lg: 'lg' }}
-              fontWeight="bold"
-              textShadow="2px 2px 4px rgba(0,0,0,0.7)"
-              zIndex={30}
-            >
-              {selectedTeam?.name || 'Seu Time'}
-            </Box>
 
             {/* Zonas de ataque do adversário (frente: Z4, Z3, Z2) — sem subdivisão */}
             {[4, 3, 2].map((zone) => (
@@ -723,13 +719,17 @@ export default function VolleyballCourt({
                   : { ids: new Set<string>(), badge: '', color: '', badgeMap: undefined as Map<string, string> | undefined, colorMap: undefined as Map<string, string> | undefined }
 
                 // Modo de formação:
-                // - 'serve': meu time sacando, aguardando o saque
+                // - 'serve': meu time sacando (antes e durante o rally após saque próprio)
                 // - 'reception': adversário sacando, aguardando recepção
-                // - 'transition': rally em andamento (após saque/recepção), jogadores em posição de jogo
+                // - 'transition': rally em andamento (após saque/recepção adversária)
+                // Exceção P1 saque próprio: SERVE_OFFSETS P1 já posiciona Ponteiro na entrada
+                // e Oposto na saída — manter esse modo durante todo o rally para evitar
+                // a inversão visual que ocorreria ao trocar para 'transition'.
                 const isServeStep = rallyState.currentStep === 'serve'
+                const isP1HomeServeRally = rotation === 1 && rallyState.servingTeam === 'home'
                 const mode: FormationMode = isServeStep
                   ? (rallyState.servingTeam === 'home' ? 'serve' : 'reception')
-                  : 'transition'
+                  : (isP1HomeServeRally ? 'serve' : 'transition')
 
                 return courtPlayers
                   .slice(0, 6)
@@ -1014,6 +1014,46 @@ export default function VolleyballCourt({
               ))}
             </>
           </Box>
+
+          {/* Strip: Meu Time */}
+          <Flex
+            align="center"
+            justify="space-between"
+            px={4}
+            py={2}
+            borderTopWidth="1px"
+            borderTopColor="whiteAlpha.100"
+            bg="rgba(99, 179, 237, 0.05)"
+            flexShrink={0}
+            borderBottomRadius={{ base: 'xl', sm: '2xl' }}
+          >
+            <Flex align="center" gap={2}>
+              <Box w="5px" h="5px" borderRadius="full" bg="blue.400" flexShrink={0} />
+              <Text
+                color="blue.400"
+                fontSize="xs"
+                fontWeight="bold"
+                textTransform="uppercase"
+                letterSpacing="0.12em"
+              >
+                {selectedTeam?.name || 'Meu Time'}
+              </Text>
+            </Flex>
+            <Button
+              size="xs"
+              colorScheme="yellow"
+              variant="solid"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowSubModal(true)
+              }}
+              isDisabled={!gameStarted}
+              _disabled={{ opacity: 0.35, cursor: 'not-allowed', bg: 'gray.600' }}
+              fontWeight="bold"
+            >
+              Substituição
+            </Button>
+          </Flex>
         </Box>
         {/* Modal de Substituição */}
       <SubstitutionModal
@@ -1029,8 +1069,8 @@ export default function VolleyballCourt({
         }}
       />
     </Grid>
-      {/* Painel de Ações */}
-      {showActionPanel && (
+      {/* Painel de Ações — suprimido quando há painel externo */}
+      {!suppressInternalActionPanel && showActionPanel && (
         <ActionPanel
           selectedPlayer={selectedPlayer!}
           playerName={players.find(p => p.jerseyNumber.toString() === selectedPlayer)?.name}
@@ -1054,11 +1094,8 @@ export default function VolleyballCourt({
           setShowPlayerSelector(false)
           setSelectedPosition(null)
         }}
-        players={selectedPosition === 7
-          ? availablePlayers.filter(p => p.position === 'libero')
-          : availablePlayers
-        }
-        position={selectedPosition === 7 ? 1 : (selectedPosition || 1)}
+        players={availablePlayers}
+        position={selectedPosition ?? 1}
         onSelectPlayer={handleAddPlayer}
         rotation={rotation}
       />
@@ -1254,15 +1291,13 @@ function getExpectedPlayerIds(
       const setterId = findPlayerByRole('levantador')
 
       // Helper: mapear zona de ataque para quem está fisicamente naquela zona
-      // Usa courtPositions + rotation — independente da posição cadastrada do atleta
       const getAttackerForZone = (zone: number): string | null => {
         return getPlayerInVisualZone(zone)
       }
 
       // Se sabemos o destino do levantamento, destacar o atacante correto
       if (lastSetDestinationZone) {
-        // Pipe / ataque de fundo: destino é zona de trás → destacar todos os jogadores
-        // de fundo (líbero filtrado no render, levantador excluído aqui)
+        // Pipe / ataque de fundo: destino é zona de trás → destacar todos de fundo
         if (BACK_ROW.has(lastSetDestinationZone)) {
           const ids = new Set<string>()
           for (const zone of [1, 5, 6]) {
@@ -1271,7 +1306,44 @@ function getExpectedPlayerIds(
           }
           return { ids, badge: 'ATACAR', color: 'orange.400' }
         }
-        const id = getAttackerForZone(lastSetDestinationZone)
+
+        // Usar PAPEL TÁTICO (lineup position) em vez de zona física — vale para todas as rotações:
+        //   Saída  (Z2) → Oposto       (lineup 4) — frente ou fundo (fundo = ataque da linha 1)
+        //   Cabeça (Z3) → Central da linha de frente (lineup 3 ou 6)
+        //   Ponta  (Z4) → Ponteiro da linha de frente (lineup 2 ou 5)
+        // Ex: P4 — levantador Z4, "saída" = Oposto no fundo (Z1), não o Ponteiro2 que está em Z2.
+        // Ex: P6 — levantador Z6, "saída" = Oposto (Z3 físico), não o Central que está em Z2.
+        const getFrontRowByLineups = (targetLineups: number[]): string | null => {
+          for (const z of [2, 3, 4]) {
+            const lp = getRotatedPosition(z, rotation)
+            if (targetLineups.includes(lp)) {
+              return courtPositions[lp as keyof CourtPositions] ?? null
+            }
+          }
+          return null
+        }
+
+        // P1 + adversário sacando: Ponteiro está fisicamente em Z2 (saída) e
+        // Oposto em Z4 (entrada) — eles NÃO cruzam na recepção, atacam de onde estão.
+        // Nos demais casos (P1 saque nosso + contra-ataque, ou qualquer outra rotação):
+        // Oposto vai para a saída (Z2) e Ponteiro vai para a entrada (Z4).
+        const isP1AdversaryServe = rotation === 1 && servingTeam === 'away'
+        let id: string | null = null
+        if (lastSetDestinationZone === 2) {
+          // Saída: P1 adversário → Ponteiro (fisicamente em Z2); demais → Oposto (lineup 4)
+          id = isP1AdversaryServe
+            ? getFrontRowByLineups([2, 5])
+            : (courtPositions[4 as keyof CourtPositions] ?? null)
+        } else if (lastSetDestinationZone === 3) {
+          // Cabeça → Central da linha de frente (sem exceção)
+          id = getFrontRowByLineups([3, 6])
+        } else if (lastSetDestinationZone === 4) {
+          // Ponta: P1 adversário → Oposto (fisicamente em Z4); demais → Ponteiro (lineup 2/5)
+          id = isP1AdversaryServe
+            ? (courtPositions[4 as keyof CourtPositions] ?? null)
+            : getFrontRowByLineups([2, 5])
+        }
+
         if (id && id !== setterId) {
           return { ids: new Set([id]), badge: 'ATACAR', color: 'orange.400' }
         }

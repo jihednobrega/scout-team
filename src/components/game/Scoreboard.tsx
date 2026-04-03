@@ -1,5 +1,11 @@
 import { Box, Flex, Text, IconButton, Icon } from '@chakra-ui/react'
 
+interface SetRecord {
+  number: number
+  homeScore: number
+  awayScore: number
+}
+
 interface ScoreboardProps {
   homeTeamName: string
   opponentName: string
@@ -9,6 +15,8 @@ interface ScoreboardProps {
   isLive?: boolean
   servingTeam?: 'home' | 'away'
   onViewHistory?: () => void
+  variant?: 'card' | 'inline'
+  setsHistory?: SetRecord[]
 }
 
 export default function Scoreboard({
@@ -20,7 +28,133 @@ export default function Scoreboard({
   isLive = false,
   servingTeam,
   onViewHistory,
+  variant = 'card',
+  setsHistory = [],
 }: ScoreboardProps) {
+  if (variant === 'inline') {
+    return (
+      <Flex align="center" gap={3} flexShrink={0}>
+
+        {/* Sets anteriores — à esquerda do placar, Set1 mais à esquerda */}
+        {setsHistory.length > 0 && (
+          <Flex align="center" gap={1} flexShrink={0}>
+            {setsHistory.map((s) => {
+              const homeWon = s.homeScore > s.awayScore
+              return (
+                <Box
+                  key={s.number}
+                  px={1.5}
+                  pt={1}
+                  pb={0.5}
+                  borderRadius="sm"
+                  borderTopWidth="2px"
+                  borderTopColor={homeWon ? 'green.500' : 'orange.500'}
+                  borderLeftWidth="1px"
+                  borderRightWidth="1px"
+                  borderBottomWidth="1px"
+                  borderLeftColor={homeWon ? 'green.900' : 'gray.800'}
+                  borderRightColor={homeWon ? 'green.900' : 'gray.800'}
+                  borderBottomColor={homeWon ? 'green.900' : 'gray.800'}
+                  bg={homeWon ? 'green.950' : 'gray.900'}
+                  flexShrink={0}
+                >
+                  <Flex align="baseline" gap={0.5}>
+                    <Text
+                      fontSize="2xs"
+                      color={homeWon ? 'green.300' : 'gray.500'}
+                      fontWeight="bold"
+                      lineHeight="1"
+                    >
+                      {s.homeScore}
+                    </Text>
+                    <Text fontSize="2xs" color="gray.700" lineHeight="1">·</Text>
+                    <Text
+                      fontSize="2xs"
+                      color={homeWon ? 'gray.500' : 'orange.300'}
+                      fontWeight="bold"
+                      lineHeight="1"
+                    >
+                      {s.awayScore}
+                    </Text>
+                  </Flex>
+                </Box>
+              )
+            })}
+            <Box w="1px" h="20px" bg="whiteAlpha.150" mx={0.5} flexShrink={0} />
+          </Flex>
+        )}
+
+        {/* Placar do set atual */}
+        <Flex align="center" gap={2}>
+          <Text
+            color={servingTeam === 'home' ? 'green.200' : 'blue.200'}
+            fontSize="sm"
+            fontWeight="semibold"
+            whiteSpace="nowrap"
+            maxW="140px"
+            overflow="hidden"
+            textOverflow="ellipsis"
+          >
+            {homeTeamName}
+          </Text>
+          <Text color="white" fontSize="2xl" fontWeight="black" lineHeight="1" data-testid="score-home">
+            {score.home}
+          </Text>
+          <Text color="gray.500" fontSize="lg" fontWeight="bold" mx={0.5}>×</Text>
+          <Text color="white" fontSize="2xl" fontWeight="black" lineHeight="1" data-testid="score-away">
+            {score.away}
+          </Text>
+          <Text
+            color={servingTeam === 'away' ? 'orange.200' : 'orange.300'}
+            fontSize="sm"
+            fontWeight="semibold"
+            whiteSpace="nowrap"
+            maxW="140px"
+            overflow="hidden"
+            textOverflow="ellipsis"
+          >
+            {opponentName}
+          </Text>
+        </Flex>
+
+        {/* Indicador do set atual — à direita do placar */}
+        <Flex
+          align="center"
+          gap={1}
+          pl={2.5}
+          borderLeftWidth="2px"
+          borderLeftColor="blue.500"
+          flexShrink={0}
+        >
+          <Box>
+            <Text
+              fontSize="8px"
+              color="blue.500"
+              fontWeight="bold"
+              textTransform="uppercase"
+              letterSpacing="0.15em"
+              lineHeight="1"
+              mb="2px"
+            >
+              Set
+            </Text>
+            <Flex align="baseline" gap={0.5}>
+              <Text color="white" fontSize="md" fontWeight="black" lineHeight="1">
+                {currentSet}
+              </Text>
+              {totalSets && (
+                <Text color="gray.600" fontSize="2xs" lineHeight="1" fontWeight="medium">
+                  /{totalSets}
+                </Text>
+              )}
+            </Flex>
+          </Box>
+        </Flex>
+
+      </Flex>
+    )
+  }
+
   return (
     <Box
       bg="blue.900"
@@ -28,14 +162,14 @@ export default function Scoreboard({
       borderWidth="1px"
       borderColor="blue.800"
       shadow="xl"
-      px={{ base: 4, md: 5 }}
-      py={{ base: 3, md: 4 }}
+      px={5}
+      py={4}
       display="flex"
       flexDirection="column"
       justifyContent="space-between"
-      minW={{ base: '100%', md: '320px' }}
-      maxW={{ base: '100%', md: '340px' }}
-      h={{ base: 'auto', md: '120px' }}
+      minW="320px"
+      maxW="340px"
+      h="120px"
     >
       <Flex justify="space-between" align="center" mb={2}>
         <Flex align="center" gap={2}>

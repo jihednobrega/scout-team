@@ -10,6 +10,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/portal/login', request.url))
   }
 
+  // Rotas do operador (não-portal): liberadas em desenvolvimento
+  if (!pathname.startsWith('/portal')) {
+    return NextResponse.next()
+  }
+
   // Deixa passar: login e APIs do portal
   if (
     pathname === '/portal/login' ||
@@ -18,7 +23,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Verifica cookie de sessão para qualquer outra rota /portal/*
+  // Verifica cookie de sessão para rotas /portal/* (exceto login e APIs)
   const session = request.cookies.get('portal_session')?.value
 
   if (!session) {

@@ -28,20 +28,50 @@ import {
   IoAddOutline,
   IoSettingsOutline,
   IoCloudUploadOutline,
+  IoCloudDownloadOutline,
   IoCheckmarkCircleOutline,
+  IoConstructOutline,
 } from 'react-icons/io5'
 import { useTeamContext } from '@/contexts/TeamContext'
 import { useTeams, Team } from '@/hooks/useTeams'
 import { ImageCropEditor } from '@/components/squad/ImageCropEditor'
+import AIUsagePanel from '@/components/ai/AIUsagePanel'
 
 export default function SettingsPage() {
   const { selectedTeam, setSelectedTeam } = useTeamContext()
   const { teams, loading, createTeam, updateTeam, deleteTeam } = useTeams()
   const toast = useToast()
 
+  // ── Cleanup ──
+  const [isCleaning, setIsCleaning] = useState(false)
+
+  const handleCleanup = async () => {
+    if (!confirm('Deletar todas as sessões de scout incompletas? Esta ação não pode ser desfeita.')) return
+    setIsCleaning(true)
+    try {
+      const params = selectedTeam ? `?teamId=${selectedTeam.id}` : ''
+      const res = await fetch(`/api/matches/cleanup${params}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        toast({ title: data.error ?? 'Erro ao limpar', status: 'error', duration: 4000 })
+        return
+      }
+      toast({
+        title: `${data.deleted} sessão(ões) removida(s)`,
+        status: data.deleted > 0 ? 'success' : 'info',
+        duration: 4000,
+      })
+    } catch {
+      toast({ title: 'Erro de conexão', status: 'error', duration: 4000 })
+    } finally {
+      setIsCleaning(false)
+    }
+  }
+
   // ── Publish / sync ──
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
+  const [isPulling, setIsPulling] = useState(false)
 
   const handlePublish = async () => {
     setIsSyncing(true)
@@ -58,6 +88,30 @@ export default function SettingsPage() {
       toast({ title: 'Erro de conexão ao publicar', status: 'error', duration: 4000 })
     } finally {
       setIsSyncing(false)
+    }
+  }
+
+  const handlePull = async () => {
+    setIsPulling(true)
+    try {
+      const res = await fetch('/api/sync/pull', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        toast({ title: data.error ?? 'Erro ao restaurar', status: 'error', duration: 5000, isClosable: true })
+        return
+      }
+      const { counts } = data
+      toast({
+        title: 'Banco local restaurado!',
+        description: `${counts.teams} equipes, ${counts.players} atletas, ${counts.matches} partidas, ${counts.actions} ações importadas.`,
+        status: 'success',
+        duration: 6000,
+        isClosable: true,
+      })
+    } catch {
+      toast({ title: 'Erro de conexão ao restaurar', status: 'error', duration: 4000 })
+    } finally {
+      setIsPulling(false)
     }
   }
 
@@ -372,16 +426,79 @@ export default function SettingsPage() {
               </Flex>
             )}
 
+            <HStack spacing={3} flexWrap="wrap">
+              <Button
+                colorScheme="green"
+                size="sm"
+                fontWeight="700"
+                leftIcon={<Icon as={IoCloudUploadOutline} boxSize={4} />}
+                isLoading={isSyncing}
+                loadingText="Publicando..."
+                onClick={handlePublish}
+              >
+                Publicar agora
+              </Button>
+              <Button
+                variant="outline"
+                colorScheme="blue"
+                size="sm"
+                fontWeight="700"
+                leftIcon={<Icon as={IoCloudDownloadOutline} boxSize={4} />}
+                isLoading={isPulling}
+                loadingText="Restaurando..."
+                onClick={handlePull}
+              >
+                Restaurar do Turso
+              </Button>
+            </HStack>
+          </Box>
+        </Box>
+
+        {/* ═══════ SECTION: AI Usage ═══════ */}
+        <Box>
+          <Flex align="center" gap={2} mb={4}>
+            <Text fontSize="sm">✨</Text>
+            <Text color="white" fontSize="sm" fontWeight="700" textTransform="uppercase" letterSpacing="0.08em">
+              Inteligência Artificial
+            </Text>
+          </Flex>
+          <AIUsagePanel teamId={selectedTeam?.id} />
+        </Box>
+
+        {/* ═══════ SECTION: Manutenção ═══════ */}
+        <Box>
+          <Flex align="center" gap={2} mb={4}>
+            <Icon as={IoConstructOutline} color="orange.400" boxSize={4} />
+            <Text color="white" fontSize="sm" fontWeight="700" textTransform="uppercase" letterSpacing="0.08em">
+              Manutenção
+            </Text>
+          </Flex>
+          <Box
+            bg="gray.900/60"
+            borderRadius="xl"
+            border="1px solid"
+            borderColor="gray.700"
+            px={4}
+            py={4}
+          >
+            <Text color="gray.400" fontSize="sm" mb={1}>
+              Limpar sessões incompletas
+            </Text>
+            <Text color="gray.600" fontSize="xs" mb={4} lineHeight="1.5">
+              Remove partidas com status "em andamento" que nunca foram finalizadas.
+              {selectedTeam ? ` Aplica apenas à equipe "${selectedTeam.name}".` : ' Aplica a todas as equipes.'}
+            </Text>
             <Button
-              colorScheme="green"
+              colorScheme="orange"
+              variant="outline"
               size="sm"
               fontWeight="700"
-              leftIcon={<Icon as={IoCloudUploadOutline} boxSize={4} />}
-              isLoading={isSyncing}
-              loadingText="Publicando..."
-              onClick={handlePublish}
+              leftIcon={<Icon as={IoTrashOutline} boxSize={4} />}
+              isLoading={isCleaning}
+              loadingText="Limpando..."
+              onClick={handleCleanup}
             >
-              Publicar agora
+              Limpar sessões incompletas
             </Button>
           </Box>
         </Box>

@@ -163,8 +163,8 @@ const RECEPTION_OFFSETS: Record<number, OffsetMap> = {
       { top: 35, right: 80 },           // 2º central – fundo (onde líbero entraria)
     ],
     ponteiro:   [
-      { top: 65, right: 45 },           // 1º ponteiro – fundo centro (recebe)
-      { top: 45, right: 25 },           // 2º ponteiro – fundo direita
+      { top: 75, right: 45 },           // 1º ponteiro – fundo centro (recebe)
+      { top: 50, right: 25 },           // 2º ponteiro – fundo direita
     ],
     oposto:     { top: 10, right: 15 },
     libero:     { top: 22, right: 45 },

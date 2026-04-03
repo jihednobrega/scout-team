@@ -115,9 +115,11 @@ export enum SetSituation {
 }
 
 // Fase do rally
+// Nota: Phase.BREAK usa o valor 'transition' para alinhar com scout.ts e os dados armazenados no DB.
+// Em terminologia FIVB, "break point" equivale ao momento em que o time está sacando.
 export enum Phase {
-  SIDEOUT = 'sideout', // recebendo
-  BREAK = 'break', // sacando
+  SIDEOUT = 'sideout',     // recebendo (side-out)
+  BREAK = 'transition',    // sacando (break point)
 }
 
 // ============================================================================

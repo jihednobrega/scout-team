@@ -55,7 +55,7 @@ export function calculatePlayerStatistics(
 
   // Bloqueios
   const blocks = playerActions.filter((a) => a.action === 'block')
-  const blockKills = blocks.filter((a) => a.subAction === 'kill').length
+  const blockKills = blocks.filter((a) => a.subAction === 'kill_block' || a.subAction === 'point').length
   const blockTouches = blocks.filter((a) => a.subAction === 'touch').length
   const blockEfficiency =
     blocks.length > 0 ? (blockKills / blocks.length) * 100 : 0

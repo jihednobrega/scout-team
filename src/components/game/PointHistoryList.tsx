@@ -6,24 +6,101 @@ interface PointHistoryListProps {
   history: PointRecord[]
   currentSet: number
   onPointClick: (point: PointRecord) => void
+  direction?: 'horizontal' | 'vertical'
+  maxH?: string
 }
 
 export default function PointHistoryList({
   history,
   currentSet,
-  onPointClick
+  onPointClick,
+  direction = 'horizontal',
+  maxH = '320px',
 }: PointHistoryListProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  
-  // Filtrar pontos do set atual
+
   const currentSetPoints = history.filter(p => p.set === currentSet)
 
-  // Auto-scroll para o final quando novos pontos são adicionados
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+      if (direction === 'vertical') {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      } else {
+        scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+      }
     }
-  }, [currentSetPoints.length])
+  }, [currentSetPoints.length, direction])
+
+  if (direction === 'vertical') {
+    return (
+      <Box>
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          mb={2}
+          textTransform="uppercase"
+          letterSpacing="wider"
+          fontWeight="bold"
+        >
+          Histórico — Set {currentSet}
+        </Text>
+        {currentSetPoints.length === 0 ? (
+          <Text fontSize="xs" color="gray.600" fontStyle="italic">
+            Nenhum ponto ainda.
+          </Text>
+        ) : (
+          <Flex
+            ref={scrollRef}
+            direction="column"
+            gap={1}
+            overflowY="auto"
+            maxH={maxH}
+            css={{
+              '&::-webkit-scrollbar': { width: '3px' },
+              '&::-webkit-scrollbar-track': { background: 'transparent' },
+              '&::-webkit-scrollbar-thumb': { background: 'rgba(255,255,255,0.15)', borderRadius: '2px' },
+            }}
+          >
+            {currentSetPoints.map((point) => (
+              <Flex
+                key={point.id}
+                align="center"
+                gap={2}
+                px={2}
+                py={1.5}
+                borderRadius="md"
+                borderLeftWidth="3px"
+                borderLeftColor={point.winner === 'home' ? 'green.500' : 'red.500'}
+                bg={point.winner === 'home' ? 'green.900/30' : 'red.900/30'}
+                cursor="pointer"
+                _hover={{ bg: point.winner === 'home' ? 'green.900/50' : 'red.900/50' }}
+                transition="background 0.15s"
+                onClick={() => onPointClick(point)}
+              >
+                <Text
+                  fontSize="xs"
+                  fontWeight="bold"
+                  color="white"
+                  fontFamily="mono"
+                  flexShrink={0}
+                  w="8"
+                >
+                  {point.score.home}-{point.score.away}
+                </Text>
+                <Text
+                  fontSize="2xs"
+                  color={point.winner === 'home' ? 'green.300' : 'red.300'}
+                  noOfLines={1}
+                >
+                  {point.winner === 'home' ? '● Meu time' : '○ Adversário'}
+                </Text>
+              </Flex>
+            ))}
+          </Flex>
+        )}
+      </Box>
+    )
+  }
 
   return (
     <Box

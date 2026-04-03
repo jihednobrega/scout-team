@@ -1,7 +1,7 @@
 // app/squad/[id]/page.tsx
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import {
@@ -13,11 +13,16 @@ import {
   Grid,
   Badge,
   Spinner,
+  Icon,
   Tabs,
   TabList,
   TabPanels,
   Tab,
   TabPanel,
+  useDisclosure,
+  Drawer, DrawerOverlay, DrawerContent, DrawerHeader, DrawerBody, DrawerCloseButton,
+  AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogContent, AlertDialogOverlay,
 } from '@chakra-ui/react'
 import {
   RadarChart,
@@ -38,6 +43,8 @@ import {
 import { usePlayersAPI } from '@/hooks/usePlayersAPI'
 import { useTeamContext } from '@/contexts/TeamContext'
 import { POSITION_LABELS } from '@/types/player'
+import AIStreamingPanel from '@/components/ai/AIStreamingPanel'
+import { IoSparkles } from 'react-icons/io5'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const pct = (n: number, total: number) =>
@@ -77,7 +84,7 @@ function FundamentalBar({ title, icon, total, segments }: FundamentalBarProps) {
       {/* Header */}
       <Flex justify="space-between" align="center" mb={4}>
         <Flex align="center" gap={2}>
-          <Text fontSize="lg">{icon}</Text>
+          <img src={icon} alt="" width={20} height={20} style={{ display: 'block', objectFit: 'contain' }} />
           <Text color="white" fontWeight="bold" fontSize="md">{title}</Text>
         </Flex>
         <Box
@@ -200,6 +207,12 @@ export default function PlayerDetailsPage() {
 
   const [statsData, setStatsData] = useState<any>(null)
   const [matchesPerformance, setMatchesPerformance] = useState<any[]>([])
+  const [hasCachedInsight, setHasCachedInsight] = useState(false)
+  const [autoGenerate, setAutoGenerate] = useState(false)
+  const [drawerKey, setDrawerKey] = useState(0)
+  const { isOpen: isDrawerOpen, onOpen: onDrawerOpen, onClose: onDrawerClose } = useDisclosure()
+  const { isOpen: isConfirmOpen, onOpen: onConfirmOpen, onClose: onConfirmClose } = useDisclosure()
+  const confirmCancelRef = useRef<HTMLButtonElement>(null)
 
   const fetchStats = useCallback(async () => {
     if (!selectedTeamId || !playerId) return
@@ -238,6 +251,34 @@ export default function PlayerDetailsPage() {
   }, [selectedTeamId, playerId])
 
   useEffect(() => { fetchStats() }, [fetchStats])
+
+  useEffect(() => {
+    if (!selectedTeamId || !playerId) return
+    const params = new URLSearchParams({ type: 'player_dev', teamId: selectedTeamId, playerId })
+    fetch(`/api/ai/insights?${params}`)
+      .then(r => r.json())
+      .then(data => setHasCachedInsight(!!data.found))
+      .catch(() => {})
+  }, [selectedTeamId, playerId])
+
+  const handleOpenAI = () => {
+    if (!selectedTeamId) return
+    if (hasCachedInsight) {
+      setAutoGenerate(false)
+      setDrawerKey(k => k + 1)
+      onDrawerOpen()
+    } else {
+      onConfirmOpen()
+    }
+  }
+
+  const handleConfirmGenerate = () => {
+    onConfirmClose()
+    setAutoGenerate(true)
+    setDrawerKey(k => k + 1)
+    setHasCachedInsight(true)
+    onDrawerOpen()
+  }
 
   const fundamentals = useMemo(() => {
     if (!statsData) return null
@@ -517,6 +558,21 @@ export default function PlayerDetailsPage() {
         </Grid>
       </Box>
 
+      {/* ── Botão IA ──────────────────────────────────────────────── */}
+      {selectedTeamId && (
+        <Flex justify="flex-end" mb={4}>
+          <Button
+            leftIcon={<Icon as={IoSparkles} />}
+            colorScheme="purple"
+            variant={hasCachedInsight ? 'solid' : 'outline'}
+            size="md"
+            onClick={handleOpenAI}
+          >
+            {hasCachedInsight ? 'Ver relatório IA' : 'Relatório de Desenvolvimento com IA'}
+          </Button>
+        </Flex>
+      )}
+
       {/* ── Tabs ──────────────────────────────────────────────────── */}
       <Tabs colorScheme="blue" variant="soft-rounded">
         <TabList
@@ -528,7 +584,7 @@ export default function PlayerDetailsPage() {
           borderColor="gray.700"
           gap={1}
         >
-          {['Fundamentos', 'Evolução', 'Visão Geral'].map((label) => (
+          {['Fundamentos', 'Evolução'].map((label) => (
             <Tab
               key={label}
               color="gray.400"
@@ -565,31 +621,31 @@ export default function PlayerDetailsPage() {
               <Grid templateColumns={{ base: '1fr', lg: 'repeat(2, 1fr)' }} gap={4}>
                 <FundamentalBar
                   title="Saque"
-                  icon="🏐"
+                  icon="/icons/serve.svg"
                   total={fundamentals.serve.total}
                   segments={fundamentals.serve.segments}
                 />
                 <FundamentalBar
                   title="Recepção"
-                  icon="📥"
+                  icon="/icons/reception.svg"
                   total={fundamentals.reception.total}
                   segments={fundamentals.reception.segments}
                 />
                 <FundamentalBar
                   title="Ataque"
-                  icon="⚡"
+                  icon="/icons/attack.svg"
                   total={fundamentals.attack.total}
                   segments={fundamentals.attack.segments}
                 />
                 <FundamentalBar
                   title="Bloqueio"
-                  icon="🚫"
+                  icon="/icons/block.svg"
                   total={fundamentals.block.total}
                   segments={fundamentals.block.segments}
                 />
                 <FundamentalBar
                   title="Defesa"
-                  icon="🛡️"
+                  icon="/icons/defense.svg"
                   total={fundamentals.defense.total}
                   segments={fundamentals.defense.segments}
                 />
@@ -606,7 +662,7 @@ export default function PlayerDetailsPage() {
                 >
                   <Flex justify="space-between" align="center" mb={4}>
                     <Flex align="center" gap={2}>
-                      <Text fontSize="lg">🙌</Text>
+                      <img src="/icons/set.svg" alt="" width={20} height={20} style={{ display: 'block', objectFit: 'contain' }} />
                       <Text color="white" fontWeight="bold" fontSize="md">Levantamento</Text>
                     </Flex>
                     <Box bg="whiteAlpha.100" borderRadius="full" px={3} py={0.5}>
@@ -808,157 +864,66 @@ export default function PlayerDetailsPage() {
             )}
           </TabPanel>
 
-          {/* ── Tab 3: Visão Geral ───────────────────────────────────── */}
-          <TabPanel px={0} pt={0}>
-            <Grid templateColumns={{ base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }} gap={4}>
-              {/* Saque resumo */}
-              {statsData && [
-                {
-                  icon: '🏐', label: 'Saque',
-                  accent: '#22C55E',
-                  lines: [
-                    { k: 'Aces', v: statsData.serve.aces, pct: pct(statsData.serve.aces, statsData.serve.total) },
-                    { k: 'Erros', v: statsData.serve.errors, pct: pct(statsData.serve.errors, statsData.serve.total) },
-                    { k: 'Total', v: statsData.serve.total, pct: '—' },
-                  ],
-                  rating: statsData.serve.rating,
-                },
-                {
-                  icon: '📥', label: 'Recepção',
-                  accent: '#3B82F6',
-                  lines: [
-                    { k: 'Perfeitas', v: statsData.reception.perfect, pct: pct(statsData.reception.perfect, statsData.reception.total) },
-                    { k: 'Erros', v: statsData.reception.errors, pct: pct(statsData.reception.errors, statsData.reception.total) },
-                    { k: 'Total', v: statsData.reception.total, pct: '—' },
-                  ],
-                  rating: statsData.reception.rating,
-                },
-                {
-                  icon: '⚡', label: 'Ataque',
-                  accent: accentColor,
-                  lines: [
-                    { k: 'Pontos', v: statsData.attack.kills, pct: pct(statsData.attack.kills, statsData.attack.total) },
-                    { k: 'Bloqueados', v: statsData.attack.blocked, pct: pct(statsData.attack.blocked, statsData.attack.total) },
-                    { k: 'Erros', v: statsData.attack.errors, pct: pct(statsData.attack.errors, statsData.attack.total) },
-                  ],
-                  rating: statsData.attack.rating,
-                },
-                {
-                  icon: '🚫', label: 'Bloqueio',
-                  accent: '#14B8A6',
-                  lines: [
-                    { k: 'Pontos', v: statsData.block.points, pct: pct(statsData.block.points, statsData.block.total) },
-                    { k: 'Toques', v: statsData.block.touches, pct: pct(statsData.block.touches, statsData.block.total) },
-                    { k: 'Total', v: statsData.block.total, pct: '—' },
-                  ],
-                  rating: statsData.block.rating,
-                },
-                {
-                  icon: '🛡️', label: 'Defesa',
-                  accent: '#8B5CF6',
-                  lines: [
-                    { k: 'Efetivas', v: statsData.defense.perfect + statsData.defense.positive, pct: pct(statsData.defense.perfect + statsData.defense.positive, statsData.defense.total) },
-                    { k: 'Erros', v: statsData.defense.errors, pct: pct(statsData.defense.errors, statsData.defense.total) },
-                    { k: 'Total', v: statsData.defense.total, pct: '—' },
-                  ],
-                  rating: statsData.defense.rating,
-                },
-                {
-                  icon: '🙌', label: 'Levantamento',
-                  accent: '#EAB308',
-                  lines: [
-                    { k: 'Perfeitos', v: statsData.set.perfect ?? 0, pct: pct(statsData.set.perfect ?? 0, statsData.set.total) },
-                    { k: 'Erros', v: statsData.set.errors, pct: pct(statsData.set.errors, statsData.set.total) },
-                    { k: 'Total', v: statsData.set.total, pct: '—' },
-                  ],
-                  rating: statsData.set.rating,
-                },
-              ].map((card) => (
-                <Box
-                  key={card.label}
-                  bg="gray.800"
-                  borderRadius="xl"
-                  p={5}
-                  borderWidth="1px"
-                  borderColor="gray.700"
-                  position="relative"
-                  overflow="hidden"
-                >
-                  {/* Top accent line */}
-                  <Box position="absolute" top={0} left={0} right={0} h="2px" bg={card.accent} />
-
-                  <Flex justify="space-between" align="center" mb={4}>
-                    <Flex align="center" gap={2}>
-                      <Text fontSize="lg">{card.icon}</Text>
-                      <Text color="white" fontWeight="bold" fontSize="sm">{card.label}</Text>
-                    </Flex>
-                    {/* Rating badge */}
-                    <Box
-                      bg={`${card.accent}22`}
-                      borderRadius="md"
-                      px={2}
-                      py={0.5}
-                      borderWidth="1px"
-                      borderColor={`${card.accent}44`}
-                    >
-                      <Text color={card.accent} fontSize="xs" fontWeight="bold">
-                        {Math.round(card.rating ?? 0)} pts
-                      </Text>
-                    </Box>
-                  </Flex>
-
-                  {/* Rating bar */}
-                  <Box mb={4}>
-                    <Box h="4px" bg="gray.700" borderRadius="full" overflow="hidden">
-                      <Box
-                        h="full"
-                        w={`${Math.min(card.rating ?? 0, 100)}%`}
-                        bg={card.accent}
-                        borderRadius="full"
-                        transition="width 0.6s ease"
-                      />
-                    </Box>
-                  </Box>
-
-                  <Flex direction="column" gap={2}>
-                    {card.lines.map((line) => (
-                      <Flex key={line.k} justify="space-between" align="center">
-                        <Text color="gray.500" fontSize="xs">{line.k}</Text>
-                        <Flex align="center" gap={2}>
-                          {line.pct !== '—' && (
-                            <Text color="gray.600" fontSize="10px">{line.pct}%</Text>
-                          )}
-                          <Text color="white" fontSize="sm" fontWeight="bold" fontFamily="mono" w="28px" textAlign="right">
-                            {line.v}
-                          </Text>
-                        </Flex>
-                      </Flex>
-                    ))}
-                  </Flex>
-                </Box>
-              ))}
-
-              {!statsData && (
-                <Box
-                  gridColumn={{ base: '1', md: '1 / -1' }}
-                  bg="gray.800"
-                  borderRadius="xl"
-                  p={10}
-                  textAlign="center"
-                  borderWidth="1px"
-                  borderColor="gray.700"
-                >
-                  <Text fontSize="3xl" mb={3}>📋</Text>
-                  <Text color="white" fontWeight="bold" mb={2}>Sem estatísticas disponíveis</Text>
-                  <Text color="gray.500" fontSize="sm">
-                    As métricas serão calculadas automaticamente após partidas com scout registradas.
-                  </Text>
-                </Box>
-              )}
-            </Grid>
-          </TabPanel>
         </TabPanels>
       </Tabs>
+
+      {/* ── Drawer — Relatório de Desenvolvimento com IA ──────────── */}
+      <Drawer isOpen={isDrawerOpen} placement="right" onClose={onDrawerClose} size="lg">
+        <DrawerOverlay />
+        <DrawerContent bg="gray.900" borderLeftWidth="1px" borderColor="gray.700">
+          <DrawerCloseButton color="gray.400" />
+          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" pb={4}>
+            <Flex align="center" gap={3}>
+              <Icon as={IoSparkles} color="purple.400" boxSize={5} />
+              <Box>
+                <Text color="white" fontWeight="700" fontSize="lg">Relatório de Desenvolvimento</Text>
+                <Text color="gray.400" fontSize="xs" fontWeight="normal">
+                  {player.name} · {POSITION_LABELS[player.position]}
+                </Text>
+              </Box>
+              <Badge colorScheme="purple" variant="subtle" ml="auto" mr={8}>Claude</Badge>
+            </Flex>
+          </DrawerHeader>
+          <DrawerBody py={5}>
+            {selectedTeamId && (
+              <AIStreamingPanel
+                key={drawerKey}
+                type="player_dev"
+                teamId={selectedTeamId}
+                playerId={player.id}
+                embedded
+                autoGenerate={autoGenerate}
+              />
+            )}
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+
+      {/* ── AlertDialog — Confirmação ──────────────────────────────── */}
+      <AlertDialog isOpen={isConfirmOpen} leastDestructiveRef={confirmCancelRef} onClose={onConfirmClose} isCentered>
+        <AlertDialogOverlay>
+          <AlertDialogContent bg="gray.800" borderWidth="1px" borderColor="gray.700">
+            <AlertDialogHeader color="white" fontSize="lg" fontWeight="bold">
+              <Flex align="center" gap={2}>
+                <Icon as={IoSparkles} color="purple.400" />
+                Gerar relatório com IA?
+              </Flex>
+            </AlertDialogHeader>
+            <AlertDialogBody color="gray.300" fontSize="sm">
+              O Claude vai analisar o histórico de {player.name} e gerar um plano de desenvolvimento personalizado com pontos fortes, fraquezas e recomendações de treino.
+              O resultado ficará salvo para consultas futuras.
+            </AlertDialogBody>
+            <AlertDialogFooter gap={3}>
+              <Button ref={confirmCancelRef} variant="ghost" colorScheme="gray" onClick={onConfirmClose}>
+                Cancelar
+              </Button>
+              <Button colorScheme="purple" leftIcon={<Icon as={IoSparkles} />} onClick={handleConfirmGenerate}>
+                Gerar relatório
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Box>
   )
 }

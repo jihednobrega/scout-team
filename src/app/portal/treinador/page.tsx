@@ -4,6 +4,7 @@ import { Box, Flex, Text, VStack, HStack, Grid } from '@chakra-ui/react'
 import { getPortalSession } from '@/lib/portal-session'
 import { prisma } from '@/lib/prisma'
 import { LogoutButton } from '@/components/portal/LogoutButton'
+import AIInsightCard from '@/components/ai/AIInsightCard'
 import { PlayerCardLink } from '@/components/portal/PlayerCardLink'
 import {
   calculatePlayerStats, calculateRatingFromStats,
@@ -369,6 +370,15 @@ export default async function TreinadorPortalPage() {
             </Box>
           </Box>
         )}
+
+        {/* Insight IA — saúde do time */}
+        <Box w="full">
+          <AIInsightCard
+            type="team_health"
+            teamId={session.teamId}
+            accent={ACCENT}
+          />
+        </Box>
 
       </VStack>
     </Box>

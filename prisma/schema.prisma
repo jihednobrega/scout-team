@@ -26,6 +26,7 @@ model Team {
   matches Match[]
   preferences UserPreference[]
   playerPresets PlayerPreset[]
+  aiInsights AIInsight[]
 
   @@map("teams")
 }
@@ -45,6 +46,7 @@ model Player {
   // Relacionamentos
   team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
   actions ScoutAction[]
+  aiInsights AIInsight[]
 
   @@unique([teamId, jerseyNumber]) // Não pode ter número duplicado na mesma equipe
   @@map("players")
@@ -72,6 +74,7 @@ model Match {
   // Relacionamentos
   team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
   actions ScoutAction[]
+  aiInsights AIInsight[]
 
   @@map("matches")
 }
@@ -174,6 +177,31 @@ model PlayerPreset {
 
   @@unique([teamId, name])
   @@map("player_presets")
+}
+
+// Insights gerados por IA (cache + histórico)
+model AIInsight {
+  id           String   @id @default(uuid())
+  type         String   // match_analysis | player_dev | tactical_brief | lineup_opt | match_summary | athlete_insight | team_health | post_game_reflection | pattern_insights | metric_explainer
+  tier         String   // A (sonnet) | B (mini)
+  provider     String   // anthropic | openai
+  matchId      String?
+  playerId     String?
+  teamId       String
+  metricKey    String?  // para metric_explainer: "attack_efficiency", etc.
+  prompt       String   // user message enviado (debug/auditoria)
+  response     String   // resposta da IA
+  tokensUsed   Int?     // total tokens (input + output)
+  costEstimate Float?   // custo estimado em BRL
+  createdAt    DateTime @default(now())
+
+  // Relacionamentos
+  match  Match?  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([type, matchId, playerId, teamId, metricKey])
+  @@map("ai_insights")
 }
 
 // Preferências por dispositivo (sem autenticação)

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { MatchSummary } from '@/components/reports/MatchSummary';
 import { PlayerStatsTable } from '@/components/reports/PlayerStatsTable';
 import ReceptionAttackAnalysis from '@/components/reports/ReceptionAttackAnalysis';
@@ -9,11 +9,17 @@ import MacroEfficiency from '@/components/reports/MacroEfficiency';
 import AttackHeatmap from '@/components/statistics/AttackHeatmap';
 import ServeHeatmap from '@/components/statistics/ServeHeatmap';
 import ServeTypeAnalysis from '@/components/reports/ServeTypeAnalysis';
+import AIStreamingPanel from '@/components/ai/AIStreamingPanel';
 import {
   Box, Button, Flex, Heading, Text, VStack, Grid, Spinner,
   useToast, Alert, AlertIcon, AlertTitle, AlertDescription,
+  Drawer, DrawerOverlay, DrawerContent, DrawerHeader, DrawerBody, DrawerCloseButton,
+  AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogContent, AlertDialogOverlay,
+  Badge, Icon, useDisclosure,
 } from '@chakra-ui/react';
 import { MdArrowBack, MdPictureAsPdf } from 'react-icons/md';
+import { IoSparkles } from 'react-icons/io5';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { usePlayersAPI } from '@/hooks/usePlayersAPI';
@@ -34,7 +40,25 @@ export default function MatchReportPage() {
   const { match, actions, loading: loadingMatch, error } = useMatchDetail(matchId);
 
   const [exportingPdf, setExportingPdf] = React.useState(false);
+  const [hasCachedInsight, setHasCachedInsight] = React.useState(false);
+  const [autoGenerate, setAutoGenerate] = React.useState(false);
+  const [drawerKey, setDrawerKey] = React.useState(0);
+
+  const { isOpen: isDrawerOpen, onOpen: onDrawerOpen, onClose: onDrawerClose } = useDisclosure();
+  const { isOpen: isConfirmOpen, onOpen: onConfirmOpen, onClose: onConfirmClose } = useDisclosure();
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+
   const toast = useToast();
+
+  // Verifica cache ao carregar a página
+  React.useEffect(() => {
+    if (!selectedTeamId || !matchId) return;
+    const params = new URLSearchParams({ type: 'match_analysis', teamId: selectedTeamId, matchId });
+    fetch(`/api/ai/insights?${params}`)
+      .then(r => r.json())
+      .then(data => setHasCachedInsight(!!data.found))
+      .catch(() => {});
+  }, [selectedTeamId, matchId]);
 
   // ─── Player info map (id → { name, number, position }) ───────────────────
   const playerInfoMap = useMemo(() => {
@@ -82,15 +106,11 @@ export default function MatchReportPage() {
   // ─── Score derivado do campo finalScore e sets ────────────────────────────
   const score = useMemo(() => {
     if (!match) return { home: 0, away: 0, sets: [] };
-    // sets: array de { set: number, score: string } — ex: [{set:1,score:"25-20"}]
-    // ou array de { home: number, away: number }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawSets: any[] = match.sets || [];
     const setsFormatted = rawSets.map((s) => {
       if (typeof s === 'object' && 'home' in s) return { home: s.home, away: s.away };
-      // Formato SetInfo { number, homeScore, awayScore } — vindo de game/page.tsx handleEndMatch
       if (typeof s === 'object' && 'homeScore' in s) return { home: s.homeScore, away: s.awayScore };
-      // Formato "25-20"
       if (typeof s === 'object' && 'score' in s) {
         const parts = String(s.score).split('-');
         return { home: Number(parts[0]) || 0, away: Number(parts[1]) || 0 };
@@ -126,6 +146,28 @@ export default function MatchReportPage() {
     } finally {
       setExportingPdf(false);
     }
+  };
+
+  // ─── Abrir análise IA ─────────────────────────────────────────────────────
+  const handleOpenAI = () => {
+    if (!selectedTeamId) return;
+    if (hasCachedInsight) {
+      // Já sabe que tem cache — abre o drawer direto
+      setAutoGenerate(false);
+      setDrawerKey(k => k + 1);
+      onDrawerOpen();
+    } else {
+      // Sem cache — pede confirmação antes de gerar
+      onConfirmOpen();
+    }
+  };
+
+  const handleConfirmGenerate = () => {
+    onConfirmClose();
+    setAutoGenerate(true);
+    setDrawerKey(k => k + 1);
+    setHasCachedInsight(true);
+    onDrawerOpen();
   };
 
   // ─── Loading ──────────────────────────────────────────────────────────────
@@ -185,8 +227,8 @@ export default function MatchReportPage() {
         </Button>
       </Link>
 
-      <Flex direction={{ base: 'column', md: 'row' }} justify="space-between" align="center" mb={6}>
-        <Box mb={{ base: 4, md: 0 }}>
+      <Flex direction={{ base: 'column', md: 'row' }} justify="space-between" align={{ base: 'stretch', md: 'center' }} mb={6} gap={4}>
+        <Box>
           <Heading size="lg" color="white" mb={1}>
             {match.homeTeam} vs {match.awayTeam}
           </Heading>
@@ -196,18 +238,31 @@ export default function MatchReportPage() {
             {match.location && ` • ${match.location}`}
           </Text>
         </Box>
-        <Button
-          leftIcon={<MdPictureAsPdf />}
-          colorScheme="blue"
-          variant="solid"
-          onClick={handleExportPdf}
-          isLoading={exportingPdf}
-          loadingText="Gerando PDF..."
-          size="md"
-          data-testid="btn-export-pdf"
-        >
-          Exportar relatório (PDF)
-        </Button>
+        <Flex gap={3} flexShrink={0}>
+          {actions.length > 0 && selectedTeamId && (
+            <Button
+              leftIcon={<Icon as={IoSparkles} />}
+              colorScheme="purple"
+              variant={hasCachedInsight ? 'solid' : 'outline'}
+              size="md"
+              onClick={handleOpenAI}
+            >
+              {hasCachedInsight ? 'Ver análise IA' : 'Analisar com IA'}
+            </Button>
+          )}
+          <Button
+            leftIcon={<MdPictureAsPdf />}
+            colorScheme="blue"
+            variant="solid"
+            onClick={handleExportPdf}
+            isLoading={exportingPdf}
+            loadingText="Gerando PDF..."
+            size="md"
+            data-testid="btn-export-pdf"
+          >
+            Exportar relatório (PDF)
+          </Button>
+        </Flex>
       </Flex>
 
       <VStack spacing={6} align="stretch">
@@ -219,7 +274,6 @@ export default function MatchReportPage() {
           duration={durationStr}
         />
 
-        {/* Macro Efficiency — funciona com ScoutActions reais */}
         {actions.length > 0 && (
           <MacroEfficiency
             pointHistory={[]}
@@ -227,7 +281,6 @@ export default function MatchReportPage() {
           />
         )}
 
-        {/* Tabela de Estatísticas dos Atletas */}
         {playerStats.length > 0 ? (
           <PlayerStatsTable
             stats={playerStats}
@@ -250,7 +303,6 @@ export default function MatchReportPage() {
           </Box>
         )}
 
-        {/* Heatmaps de Ataque por jogador */}
         {playerStats.filter((p) => p.attack.total >= 1).length > 0 && (
           <Box>
             <Heading size="md" color="white" mb={4}>Mapa de Ataque por Jogador</Heading>
@@ -273,7 +325,6 @@ export default function MatchReportPage() {
           </Box>
         )}
 
-        {/* Heatmaps de Saque por jogador */}
         {playerStats.filter((p) => p.serve.total >= 1).length > 0 && (
           <Box>
             <Heading size="md" color="white" mb={4}>Mapa de Saque por Jogador</Heading>
@@ -296,7 +347,6 @@ export default function MatchReportPage() {
           </Box>
         )}
 
-        {/* Eficiência por Tipo de Saque */}
         {actions.length > 0 && (
           <ServeTypeAnalysis
             actions={actions}
@@ -305,7 +355,6 @@ export default function MatchReportPage() {
           />
         )}
 
-        {/* Análise Recepção → Ataque */}
         {actions.length > 0 && (
           <ReceptionAttackAnalysis
             actions={actions}
@@ -313,7 +362,6 @@ export default function MatchReportPage() {
           />
         )}
 
-        {/* Distribuição do Levantador */}
         {actions.length > 0 && (
           <SetterDistribution
             actions={actions}
@@ -321,6 +369,74 @@ export default function MatchReportPage() {
           />
         )}
       </VStack>
+
+      {/* ── Drawer — Análise com IA ─────────────────────────────────────────── */}
+      <Drawer
+        isOpen={isDrawerOpen}
+        placement="right"
+        onClose={onDrawerClose}
+        size="lg"
+      >
+        <DrawerOverlay />
+        <DrawerContent bg="gray.900" borderLeftWidth="1px" borderColor="gray.700">
+          <DrawerCloseButton color="gray.400" />
+          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" pb={4}>
+            <Flex align="center" gap={3}>
+              <Icon as={IoSparkles} color="purple.400" boxSize={5} />
+              <Box>
+                <Text color="white" fontWeight="700" fontSize="lg">Análise com IA</Text>
+                <Text color="gray.400" fontSize="xs" fontWeight="normal">
+                  {match.homeTeam} vs {match.awayTeam} · {dateFormatted}
+                </Text>
+              </Box>
+              <Badge colorScheme="purple" variant="subtle" ml="auto" mr={8}>Claude</Badge>
+            </Flex>
+          </DrawerHeader>
+          <DrawerBody py={5}>
+            {selectedTeamId && (
+              <AIStreamingPanel
+                key={drawerKey}
+                type="match_analysis"
+                teamId={selectedTeamId}
+                matchId={matchId}
+                embedded
+                autoGenerate={autoGenerate}
+              />
+            )}
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+
+      {/* ── AlertDialog — Confirmação antes de gerar ───────────────────────── */}
+      <AlertDialog
+        isOpen={isConfirmOpen}
+        leastDestructiveRef={confirmCancelRef}
+        onClose={onConfirmClose}
+        isCentered
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent bg="gray.800" borderWidth="1px" borderColor="gray.700">
+            <AlertDialogHeader color="white" fontSize="lg" fontWeight="bold">
+              <Flex align="center" gap={2}>
+                <Icon as={IoSparkles} color="purple.400" />
+                Gerar análise com IA?
+              </Flex>
+            </AlertDialogHeader>
+            <AlertDialogBody color="gray.300" fontSize="sm">
+              O Claude vai analisar todos os dados desta partida e gerar um relatório detalhado.
+              O resultado ficará salvo — nas próximas vezes será exibido instantaneamente.
+            </AlertDialogBody>
+            <AlertDialogFooter gap={3}>
+              <Button ref={confirmCancelRef} variant="ghost" colorScheme="gray" onClick={onConfirmClose}>
+                Cancelar
+              </Button>
+              <Button colorScheme="purple" leftIcon={<Icon as={IoSparkles} />} onClick={handleConfirmGenerate}>
+                Gerar análise
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Box>
   );
 }
