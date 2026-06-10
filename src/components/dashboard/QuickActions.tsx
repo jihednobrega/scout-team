@@ -19,7 +19,7 @@ const actions: QuickAction[] = [
     icon: MdSportsVolleyball,
     label: 'Novo Scout',
     description: 'Registre ações em tempo real durante a partida',
-    href: '/game/new',
+    href: '/game',
     accentColor: '#F97316',
     accentBg: 'rgba(249, 115, 22, 0.12)',
   },

@@ -182,6 +182,8 @@ export const getStorageSize = (): number => {
 
 export interface ScoutSessionState {
   dbMatchId: string
+  dbSetId: string | null     // ID do MatchSet em andamento (null se nenhum set iniciado)
+  currentSet: number         // Número do set em andamento
   setsHistory: SetInfo[]
   servingTeam: 'home' | 'away'
   rotation: number

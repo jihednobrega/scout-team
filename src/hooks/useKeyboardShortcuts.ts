@@ -10,7 +10,11 @@ interface KeyboardShortcutsConfig {
   onSelectResult: (index: number) => void
   onClose: () => void
   onUndo?: () => void
-  onOpponentError?: () => void
+  onOpponentError?: () => void   // Space → toggle error picker
+  onOpponentPoint?: () => void   // P → toggle point picker
+  opponentPickerOpen?: 'error' | 'point' | null
+  opponentPickerSize?: number    // sub-action count for the open picker
+  onOpponentPickerSelect?: (index: number) => void
   onFocusTimestamp?: () => void
   enabledFundamentos?: string[]
 }
@@ -48,8 +52,13 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
 
       const key = e.key.toLowerCase()
 
-      // Escape - close panel
+      // Escape - close panel or opponent picker
       if (key === 'escape') {
+        if (c.opponentPickerOpen) {
+          e.preventDefault()
+          c.onOpponentError?.()  // toggle to close
+          return
+        }
         if (c.showActionPanel) {
           e.preventDefault()
           c.onClose()
@@ -71,11 +80,30 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
         return
       }
 
-      // Space - opponent error (only when panel is closed and game started)
+      // Space - toggle opponent error picker (when panel is closed and game started)
       if (key === ' ' && !c.showActionPanel && c.gameStarted) {
         e.preventDefault()
         c.onOpponentError?.()
         return
+      }
+
+      // P - toggle opponent point picker (when panel is closed and game started)
+      if (key === 'p' && !c.showActionPanel && c.gameStarted) {
+        e.preventDefault()
+        c.onOpponentPoint?.()
+        return
+      }
+
+      // When opponent picker is OPEN, number keys select sub-actions
+      if (c.opponentPickerOpen && !c.showActionPanel) {
+        const num = parseInt(key)
+        const size = c.opponentPickerSize ?? 0
+        if (num >= 1 && num <= size) {
+          e.preventDefault()
+          c.onOpponentPickerSelect?.(num - 1)
+          flash(key)
+          return
+        }
       }
 
       // When ActionPanel is OPEN
@@ -102,8 +130,8 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
         return
       }
 
-      // When ActionPanel is CLOSED and game started
-      if (!c.showActionPanel && c.gameStarted) {
+      // When ActionPanel is CLOSED and game started (and picker is not open)
+      if (!c.showActionPanel && c.gameStarted && !c.opponentPickerOpen) {
         // Player selection by zone (1-6)
         const num = parseInt(key)
         if (num >= 1 && num <= 6) {

@@ -65,18 +65,43 @@ model Match {
   result      String   // vitoria, derrota, em_andamento
   finalScore  String   // "3 x 1"
   status      String   @default("in_progress") // "in_progress" | "finalized"
-  sets        String   // JSON com informações dos sets
+  sets        String   // JSON com informações dos sets (legado + resumo)
   stats       String?  // JSON com estatísticas
   duration    Int?     // duração em minutos
+  // Lineup salvo no momento da criação da partida (JSON de LineupPlayer[])
+  lineup      String?
+  liberoId    String?
+  enabledFundamentos String? // JSON de string[]
+  matchFormat String?  // "MD3" | "MD5" | number
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relacionamentos
-  team    Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  actions ScoutAction[]
+  team      Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actions   ScoutAction[]
+  matchSets MatchSet[]
   aiInsights AIInsight[]
 
   @@map("matches")
+}
+
+// Modelo de Set (entidade independente por set de uma partida)
+model MatchSet {
+  id        String   @id @default(uuid())
+  matchId   String
+  number    Int      // 1, 2, 3... — identidade do usuário; @@unique com matchId
+  homeScore Int      @default(0)
+  awayScore Int      @default(0)
+  status    String   @default("in_progress") // "in_progress" | "finalized"
+  duration  Int?     // minutos
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  match   Match         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  actions ScoutAction[]
+
+  @@unique([matchId, number])
+  @@map("match_sets")
 }
 
 // Modelo de Ação de Scout
@@ -84,13 +109,14 @@ model ScoutAction {
   id          String   @id @default(uuid())
   matchId     String
   playerId    String?  // null para ações do adversário (opponent_error, etc)
+  setId       String?  // FK para MatchSet (nullable para retrocompatibilidade)
   time        String   // horário da ação (ex: "12:35")
   action      String   // serve, attack, block, dig, set, reception
   subAction   String   // ace, kill, error, etc
   zone        Int      // 1-6
   coordinateX Float    // coordenada X (%)
   coordinateY Float    // coordenada Y (%)
-  setNumber      Int      // número do set
+  setNumber      Int      // número do set (mantido para relatórios e estatísticas)
   timestamp      DateTime
   videoTimestamp  String?  // MM:SS do vídeo (ex: "12:30")
   efficiencyValue Float?   // -1.0 a +1.0, computado server-side
@@ -100,8 +126,9 @@ model ScoutAction {
   createdAt      DateTime @default(now())
 
   // Relacionamentos
-  match  Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  player Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  match    Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player   Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  matchSet MatchSet? @relation(fields: [setId], references: [id], onDelete: SetNull)
 
   @@map("scout_actions")
 }

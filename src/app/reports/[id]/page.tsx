@@ -41,8 +41,10 @@ export default function MatchReportPage() {
 
   const [exportingPdf, setExportingPdf] = React.useState(false);
   const [hasCachedInsight, setHasCachedInsight] = React.useState(false);
+  const [hasCachedTactical, setHasCachedTactical] = React.useState(false);
   const [autoGenerate, setAutoGenerate] = React.useState(false);
   const [drawerKey, setDrawerKey] = React.useState(0);
+  const [activeInsightType, setActiveInsightType] = React.useState<'match_analysis' | 'tactical_brief'>('match_analysis');
 
   const { isOpen: isDrawerOpen, onOpen: onDrawerOpen, onClose: onDrawerClose } = useDisclosure();
   const { isOpen: isConfirmOpen, onOpen: onConfirmOpen, onClose: onConfirmClose } = useDisclosure();
@@ -53,11 +55,10 @@ export default function MatchReportPage() {
   // Verifica cache ao carregar a página
   React.useEffect(() => {
     if (!selectedTeamId || !matchId) return;
-    const params = new URLSearchParams({ type: 'match_analysis', teamId: selectedTeamId, matchId });
-    fetch(`/api/ai/insights?${params}`)
-      .then(r => r.json())
-      .then(data => setHasCachedInsight(!!data.found))
-      .catch(() => {});
+    const p1 = new URLSearchParams({ type: 'match_analysis', teamId: selectedTeamId, matchId });
+    const p2 = new URLSearchParams({ type: 'tactical_brief', teamId: selectedTeamId, matchId });
+    fetch(`/api/ai/insights?${p1}`).then(r => r.json()).then(d => setHasCachedInsight(!!d.found)).catch(() => {});
+    fetch(`/api/ai/insights?${p2}`).then(r => r.json()).then(d => setHasCachedTactical(!!d.found)).catch(() => {});
   }, [selectedTeamId, matchId]);
 
   // ─── Player info map (id → { name, number, position }) ───────────────────
@@ -149,15 +150,15 @@ export default function MatchReportPage() {
   };
 
   // ─── Abrir análise IA ─────────────────────────────────────────────────────
-  const handleOpenAI = () => {
+  const handleOpenInsight = (type: 'match_analysis' | 'tactical_brief') => {
     if (!selectedTeamId) return;
-    if (hasCachedInsight) {
-      // Já sabe que tem cache — abre o drawer direto
+    setActiveInsightType(type);
+    const hasCached = type === 'match_analysis' ? hasCachedInsight : hasCachedTactical;
+    if (hasCached) {
       setAutoGenerate(false);
       setDrawerKey(k => k + 1);
       onDrawerOpen();
     } else {
-      // Sem cache — pede confirmação antes de gerar
       onConfirmOpen();
     }
   };
@@ -166,7 +167,8 @@ export default function MatchReportPage() {
     onConfirmClose();
     setAutoGenerate(true);
     setDrawerKey(k => k + 1);
-    setHasCachedInsight(true);
+    if (activeInsightType === 'match_analysis') setHasCachedInsight(true);
+    else setHasCachedTactical(true);
     onDrawerOpen();
   };
 
@@ -238,17 +240,28 @@ export default function MatchReportPage() {
             {match.location && ` • ${match.location}`}
           </Text>
         </Box>
-        <Flex gap={3} flexShrink={0}>
+        <Flex gap={3} flexShrink={0} flexWrap="wrap">
           {actions.length > 0 && selectedTeamId && (
-            <Button
-              leftIcon={<Icon as={IoSparkles} />}
-              colorScheme="purple"
-              variant={hasCachedInsight ? 'solid' : 'outline'}
-              size="md"
-              onClick={handleOpenAI}
-            >
-              {hasCachedInsight ? 'Ver análise IA' : 'Analisar com IA'}
-            </Button>
+            <>
+              <Button
+                leftIcon={<Icon as={IoSparkles} />}
+                colorScheme="purple"
+                variant={hasCachedInsight ? 'solid' : 'outline'}
+                size="md"
+                onClick={() => handleOpenInsight('match_analysis')}
+              >
+                {hasCachedInsight ? 'Ver análise IA' : 'Analisar com IA'}
+              </Button>
+              <Button
+                leftIcon={<Icon as={IoSparkles} />}
+                colorScheme="teal"
+                variant={hasCachedTactical ? 'solid' : 'outline'}
+                size="md"
+                onClick={() => handleOpenInsight('tactical_brief')}
+              >
+                {hasCachedTactical ? 'Ver briefing tático' : 'Briefing tático IA'}
+              </Button>
+            </>
           )}
           <Button
             leftIcon={<MdPictureAsPdf />}
@@ -370,7 +383,7 @@ export default function MatchReportPage() {
         )}
       </VStack>
 
-      {/* ── Drawer — Análise com IA ─────────────────────────────────────────── */}
+      {/* ── Drawer — Análise / Briefing com IA ────────────────────────────────── */}
       <Drawer
         isOpen={isDrawerOpen}
         placement="right"
@@ -382,21 +395,30 @@ export default function MatchReportPage() {
           <DrawerCloseButton color="gray.400" />
           <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" pb={4}>
             <Flex align="center" gap={3}>
-              <Icon as={IoSparkles} color="purple.400" boxSize={5} />
+              <Icon as={IoSparkles} color={activeInsightType === 'tactical_brief' ? 'teal.400' : 'purple.400'} boxSize={5} />
               <Box>
-                <Text color="white" fontWeight="700" fontSize="lg">Análise com IA</Text>
+                <Text color="white" fontWeight="700" fontSize="lg">
+                  {activeInsightType === 'tactical_brief' ? 'Briefing Tático' : 'Análise com IA'}
+                </Text>
                 <Text color="gray.400" fontSize="xs" fontWeight="normal">
                   {match.homeTeam} vs {match.awayTeam} · {dateFormatted}
                 </Text>
               </Box>
-              <Badge colorScheme="purple" variant="subtle" ml="auto" mr={8}>Claude</Badge>
+              <Badge
+                colorScheme={activeInsightType === 'tactical_brief' ? 'teal' : 'purple'}
+                variant="subtle"
+                ml="auto"
+                mr={8}
+              >
+                Claude
+              </Badge>
             </Flex>
           </DrawerHeader>
           <DrawerBody py={5}>
             {selectedTeamId && (
               <AIStreamingPanel
                 key={drawerKey}
-                type="match_analysis"
+                type={activeInsightType}
                 teamId={selectedTeamId}
                 matchId={matchId}
                 embedded
@@ -418,20 +440,25 @@ export default function MatchReportPage() {
           <AlertDialogContent bg="gray.800" borderWidth="1px" borderColor="gray.700">
             <AlertDialogHeader color="white" fontSize="lg" fontWeight="bold">
               <Flex align="center" gap={2}>
-                <Icon as={IoSparkles} color="purple.400" />
-                Gerar análise com IA?
+                <Icon as={IoSparkles} color={activeInsightType === 'tactical_brief' ? 'teal.400' : 'purple.400'} />
+                {activeInsightType === 'tactical_brief' ? 'Gerar briefing tático?' : 'Gerar análise com IA?'}
               </Flex>
             </AlertDialogHeader>
             <AlertDialogBody color="gray.300" fontSize="sm">
-              O Claude vai analisar todos os dados desta partida e gerar um relatório detalhado.
-              O resultado ficará salvo — nas próximas vezes será exibido instantaneamente.
+              {activeInsightType === 'tactical_brief'
+                ? 'O Claude vai gerar um briefing tático com análise ofensiva, de recepção, rotações e recomendações de treino. O resultado ficará salvo para consultas futuras.'
+                : 'O Claude vai analisar todos os dados desta partida e gerar um relatório detalhado. O resultado ficará salvo — nas próximas vezes será exibido instantaneamente.'}
             </AlertDialogBody>
             <AlertDialogFooter gap={3}>
               <Button ref={confirmCancelRef} variant="ghost" colorScheme="gray" onClick={onConfirmClose}>
                 Cancelar
               </Button>
-              <Button colorScheme="purple" leftIcon={<Icon as={IoSparkles} />} onClick={handleConfirmGenerate}>
-                Gerar análise
+              <Button
+                colorScheme={activeInsightType === 'tactical_brief' ? 'teal' : 'purple'}
+                leftIcon={<Icon as={IoSparkles} />}
+                onClick={handleConfirmGenerate}
+              >
+                {activeInsightType === 'tactical_brief' ? 'Gerar briefing' : 'Gerar análise'}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -229,6 +229,51 @@ export default function MacroEfficiency({ pointHistory, scoutActions }: MacroEff
     [scoutActions]
   )
 
+  const opponentErrorBreakdown = useMemo(() => {
+    const actions = (scoutActions ?? []).filter(a => a.action === 'opponent_error')
+    const counts: Record<string, number> = {}
+    for (const a of actions) {
+      counts[a.subAction] = (counts[a.subAction] ?? 0) + 1
+    }
+    return counts
+  }, [scoutActions])
+
+  const opponentPoints = useMemo(
+    () => (scoutActions ?? []).filter(a => a.action === 'opponent_point').length,
+    [scoutActions]
+  )
+
+  const opponentPointBreakdown = useMemo(() => {
+    const actions = (scoutActions ?? []).filter(a => a.action === 'opponent_point')
+    const counts: Record<string, number> = {}
+    for (const a of actions) {
+      counts[a.subAction] = (counts[a.subAction] ?? 0) + 1
+    }
+    return counts
+  }, [scoutActions])
+
+  // True quando existem sub-tipos além de 'error' genérico
+  const hasTypedOpponentErrors = useMemo(
+    () => Object.keys(opponentErrorBreakdown).some(k => k !== 'error'),
+    [opponentErrorBreakdown]
+  )
+
+  const ERROR_LABELS: Record<string, string> = {
+    serve_error: 'Saque',
+    attack_error: 'Ataque',
+    block_error: 'Bloqueio',
+    set_error: 'Levant.',
+    violation: 'Infração',
+    error: 'Genérico',
+  }
+
+  const POINT_LABELS: Record<string, string> = {
+    kill: 'Ataque',
+    ace: 'Ace',
+    block_point: 'Bloqueio',
+    error: 'Genérico',
+  }
+
   if (!data.hasData) return null
 
   const { sideOut, breakPoint, serveToBreakRatio, receptionToSideOutRatio } = data
@@ -296,9 +341,43 @@ export default function MacroEfficiency({ pointHistory, scoutActions }: MacroEff
             <Text fontSize="3xl" fontWeight="bold" color="yellow.300" lineHeight="1" mb={1}>
               {opponentErrors}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color="gray.500" mb={hasTypedOpponentErrors ? 2 : 0}>
               Pontos ganhos por erros não-forçados do adversário
             </Text>
+            {hasTypedOpponentErrors && (
+              <Flex gap={2} flexWrap="wrap">
+                {Object.entries(opponentErrorBreakdown).map(([sub, count]) => (
+                  <Box key={sub} bg="yellow.900/30" px={2} py={0.5} borderRadius="md">
+                    <Text fontSize="10px" color="yellow.300">
+                      {ERROR_LABELS[sub] ?? sub}: <strong>{count}</strong>
+                    </Text>
+                  </Box>
+                ))}
+              </Flex>
+            )}
+          </Box>
+        )}
+
+        {opponentPoints > 0 && (
+          <Box bg="gray.900" borderRadius="xl" p={4} borderWidth="1px" borderColor="gray.700">
+            <Text fontSize="xs" fontWeight="bold" textTransform="uppercase" letterSpacing="wider" color="gray.400" mb={1}>
+              Pontos do Adversário
+            </Text>
+            <Text fontSize="3xl" fontWeight="bold" color="orange.300" lineHeight="1" mb={1}>
+              {opponentPoints}
+            </Text>
+            <Text fontSize="xs" color="gray.500" mb={2}>
+              Pontos marcados pelo adversário registrados manualmente
+            </Text>
+            <Flex gap={2} flexWrap="wrap">
+              {Object.entries(opponentPointBreakdown).map(([sub, count]) => (
+                <Box key={sub} bg="orange.900/30" px={2} py={0.5} borderRadius="md">
+                  <Text fontSize="10px" color="orange.300">
+                    {POINT_LABELS[sub] ?? sub}: <strong>{count}</strong>
+                  </Text>
+                </Box>
+              ))}
+            </Flex>
           </Box>
         )}
       </Grid>

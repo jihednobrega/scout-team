@@ -31,6 +31,8 @@ interface AIStreamingPanelProps {
   embedded?: boolean
   /** Dispara geração automaticamente se não houver cache */
   autoGenerate?: boolean
+  /** Modo leitura: exibe insight existente, sem botões de gerar/regenerar/deletar */
+  readOnly?: boolean
 }
 
 interface InsightData {
@@ -53,6 +55,7 @@ export default function AIStreamingPanel({
   defaultOpen = false,
   embedded = false,
   autoGenerate = false,
+  readOnly = false,
 }: AIStreamingPanelProps) {
   const { isOpen, onToggle } = useDisclosure({ defaultIsOpen: embedded || defaultOpen })
   const [insight, setInsight] = useState<InsightData | null>(null)
@@ -211,7 +214,7 @@ export default function AIStreamingPanel({
   }, [insight, toast])
 
   const displayText = insight?.response || streamingText
-  const showGenerateButton = !insight && !isLoading && !isStreaming && !streamingText
+  const showGenerateButton = !readOnly && !insight && !isLoading && !isStreaming && !streamingText
   const createdAt = insight?.createdAt
     ? new Date(insight.createdAt).toLocaleDateString('pt-BR', {
         day: '2-digit', month: '2-digit', year: 'numeric',
@@ -233,6 +236,16 @@ export default function AIStreamingPanel({
         >
           Analisar com IA
         </Button>
+      )}
+
+      {/* Estado vazio em modo readOnly */}
+      {readOnly && hasCheckedCache && !insight && !isLoading && !isStreaming && !streamingText && (
+        <Flex direction="column" align="center" py={8} gap={3}>
+          <Icon as={IoSparkles} color="gray.700" boxSize={6} />
+          <Text color="gray.600" fontSize="sm" textAlign="center">
+            Nenhuma análise disponível ainda.
+          </Text>
+        </Flex>
       )}
 
       {/* Error message */}
@@ -306,7 +319,7 @@ export default function AIStreamingPanel({
                 </Badge>
               )}
             </Flex>
-            {(insight || streamingText) && !isStreaming && (
+            {!readOnly && (insight || streamingText) && !isStreaming && (
               <Flex gap={2} align="center">
                 {confirmingRegenerate ? (
                   <>

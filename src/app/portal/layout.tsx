@@ -18,6 +18,9 @@ const jakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: 'Scout Center',
   description: 'Portal de acesso para atletas e treinadores',
+  icons: {
+    icon: '/icons/logo.svg',
+  },
 }
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {

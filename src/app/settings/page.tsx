@@ -568,7 +568,7 @@ export default function SettingsPage() {
                   <Input
                     value={newTeamName}
                     onChange={(e) => setNewTeamName(e.target.value)}
-                    placeholder="Ex: Vôlei Santos FC"
+                    placeholder="Ex: Aliança Vôlei"
                     bg="gray.800/50"
                     border="1px solid"
                     borderColor="gray.700"

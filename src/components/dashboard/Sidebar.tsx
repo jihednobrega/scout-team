@@ -8,7 +8,7 @@ import { useTeamContext } from '@/contexts/TeamContext'
 
 const mainItems = [
   { icon: '/icons/dashboard.svg',   label: 'Dashboard',    href: '/',            requiresTeam: false },
-  { icon: '/icons/new-game.svg',    label: 'Novo Jogo',    href: '/game',        requiresTeam: true  },
+  { icon: '/icons/new-game.svg',    label: 'Iniciar Scout', href: '/game',       requiresTeam: true  },
   { icon: '/icons/squad.svg',       label: 'Minha Equipe', href: '/squad',       requiresTeam: true  },
   { icon: '/icons/history.svg',     label: 'Jogos',        href: '/history',     requiresTeam: true  },
   { icon: '/icons/statistics.svg',  label: 'Estatísticas', href: '/statistics',  requiresTeam: true  },
@@ -17,7 +17,8 @@ const mainItems = [
 ]
 
 const bottomItems = [
-  { icon: '/icons/settings.svg', label: 'Configurações', href: '/settings', requiresTeam: false },
+  { icon: '/icons/settings.svg', label: 'Configurações', href: '/settings',        requiresTeam: false },
+  { icon: '/icons/logo.svg',     label: 'Portal',        href: '/preview',          requiresTeam: false },
 ]
 
 function NavItem({

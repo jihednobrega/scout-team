@@ -6,10 +6,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const navItems = [
-  { icon: '/icons/dashboard.svg',   label: 'Dashboard',    href: '/'            },
-  { icon: '/icons/new-game.svg',    label: 'Novo Jogo',    href: '/game'        },
-  { icon: '/icons/statistics.svg',  label: 'Estatísticas', href: '/statistics'  },
-  { icon: '/icons/ai-insights.svg', label: 'IA',           href: '/ai-insights' },
+  { icon: '/icons/dashboard.svg',   label: 'Dashboard',    href: '/'                  },
+  { icon: '/icons/new-game.svg',    label: 'Novo Jogo',    href: '/game'              },
+  { icon: '/icons/statistics.svg',  label: 'Estatísticas', href: '/statistics'        },
+  { icon: '/icons/logo.svg',        label: 'Portal',       href: '/preview'           },
 ]
 
 export default function BottomNav() {

@@ -1,11 +1,5 @@
 'use client'
 
-/**
- * AIInsightCard — Card compacto para insights Tier B (GPT-4o-mini)
- * Usado nos portais e páginas de histórico
- * Client component que pode ser embeddado em server components
- */
-
 import React, { useState, useCallback, useEffect } from 'react'
 import { Box, Flex, Text, Button, Spinner, Icon } from '@chakra-ui/react'
 import { IoSparkles, IoRefresh } from 'react-icons/io5'
@@ -18,6 +12,10 @@ interface AIInsightCardProps {
   playerId?: string
   metricKey?: string
   accent?: string
+  /** Modo leitura: sem botões de gerar/atualizar. Exige clique para carregar, a menos que autoLoad=true */
+  readOnly?: boolean
+  /** Quando true + readOnly, busca o cache automaticamente ao montar (sem precisar de clique) */
+  autoLoad?: boolean
 }
 
 export default function AIInsightCard({
@@ -27,15 +25,21 @@ export default function AIInsightCard({
   playerId,
   metricKey,
   accent = '#A78BFA',
+  readOnly = false,
+  autoLoad = false,
 }: AIInsightCardProps) {
   const [text, setText] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [cached, setCached] = useState(false)
+  const [loadAttempted, setLoadAttempted] = useState(false)
+  const [noInsightAvailable, setNoInsightAvailable] = useState(false)
 
-  // Checar cache ao montar
   useEffect(() => {
-    checkCache()
+    if (!readOnly) {
+      checkCache()
+    } else if (autoLoad) {
+      handleReadOnlyLoad()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, matchId, playerId, teamId])
 
@@ -50,10 +54,35 @@ export default function AIInsightCard({
       const data = await res.json()
       if (data.found) {
         setText(data.insight.response)
-        setCached(true)
+      } else {
+        setNoInsightAvailable(true)
       }
     } catch {
-      // silently fail cache check
+      // silently fail
+    }
+  }, [type, teamId, matchId, playerId, metricKey])
+
+  const handleReadOnlyLoad = useCallback(async () => {
+    setLoadAttempted(true)
+    setIsLoading(true)
+    setNoInsightAvailable(false)
+    try {
+      const params = new URLSearchParams({ type, teamId })
+      if (matchId) params.set('matchId', matchId)
+      if (playerId) params.set('playerId', playerId)
+      if (metricKey) params.set('metricKey', metricKey)
+
+      const res = await fetch(`/api/ai/insights?${params}`)
+      const data = await res.json()
+      if (data.found) {
+        setText(data.insight.response)
+      } else {
+        setNoInsightAvailable(true)
+      }
+    } catch {
+      setNoInsightAvailable(true)
+    } finally {
+      setIsLoading(false)
     }
   }, [type, teamId, matchId, playerId, metricKey])
 
@@ -81,7 +110,6 @@ export default function AIInsightCard({
 
       const data = await res.json()
       setText(data.insight.response)
-      setCached(data.cached)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -89,8 +117,35 @@ export default function AIInsightCard({
     }
   }, [type, teamId, matchId, playerId, metricKey])
 
-  // Sem texto e sem loading → mostra botão
-  if (!text && !isLoading && !error) {
+  // ── readOnly: atleta ainda não clicou → botão "Ver insight"
+  if (readOnly && !loadAttempted && !text) {
+    return (
+      <Box
+        borderRadius="14px"
+        overflow="hidden"
+        style={{
+          background: 'rgba(255,255,255,0.028)',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}
+      >
+        <Button
+          w="full"
+          variant="ghost"
+          color="whiteAlpha.600"
+          py={6}
+          onClick={handleReadOnlyLoad}
+          _hover={{ bg: 'whiteAlpha.50', color: 'white' }}
+          leftIcon={<Icon as={IoSparkles} color={accent} />}
+          fontSize="sm"
+        >
+          Ver insight da IA
+        </Button>
+      </Box>
+    )
+  }
+
+  // ── operador sem cache e sem loading → botão gerar
+  if (!readOnly && !text && !isLoading && !error) {
     return (
       <Box
         borderRadius="14px"
@@ -138,7 +193,7 @@ export default function AIInsightCard({
               Insight IA
             </Text>
           </Flex>
-          {text && !isLoading && (
+          {text && !isLoading && !readOnly && (
             <Button
               size="xs"
               variant="ghost"
@@ -158,8 +213,15 @@ export default function AIInsightCard({
         {isLoading && (
           <Flex align="center" gap={2} py={2}>
             <Spinner size="xs" color={accent} />
-            <Text fontSize="xs" color="whiteAlpha.500">Gerando insight...</Text>
+            <Text fontSize="xs" color="whiteAlpha.500">Carregando insight...</Text>
           </Flex>
+        )}
+
+        {/* Sem insight disponível (readOnly) */}
+        {noInsightAvailable && !isLoading && (
+          <Text fontSize="13px" color="whiteAlpha.400" py={1} fontStyle="italic">
+            Nenhum insight disponível ainda.
+          </Text>
         )}
 
         {/* Error */}

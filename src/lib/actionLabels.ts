@@ -243,6 +243,7 @@ export const ACTION_NAMES: Record<string, string> = {
   dig: 'Defesa',
   set: 'Levantamento',
   opponent_error: 'Erro adversário',
+  opponent_point: 'Ponto adversário',
   substitution: 'Substituição',
 }
 
@@ -290,6 +291,20 @@ const SCOUT_SUB_ACTION_MAP: Record<string, ActionLabelEntry> = {
   'set:positive': SET_LABELS.OK,
   'set:negative': SET_LABELS.POOR,
   'set:error':    SET_LABELS.ERROR,
+
+  // ERRO ADVERSÁRIO (sub-ações tipadas)
+  'opponent_error:serve_error':  { enumValue: 'SERVE_ERROR',  label: 'Erro de saque',        dataVolley: 'S=', color: SCOUT_COLORS.ERROR.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.ERROR.hex], colorName: 'red',    efficiencyValue: 1.0, description: 'Saque do adversário fora ou na rede' },
+  'opponent_error:attack_error': { enumValue: 'ATTACK_ERROR', label: 'Erro de ataque',        dataVolley: 'A=', color: SCOUT_COLORS.ERROR.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.ERROR.hex], colorName: 'red',    efficiencyValue: 1.0, description: 'Ataque do adversário fora ou na rede' },
+  'opponent_error:block_error':  { enumValue: 'BLOCK_ERROR',  label: 'Erro de bloqueio',      dataVolley: 'B=', color: SCOUT_COLORS.ERROR.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.ERROR.hex], colorName: 'red',    efficiencyValue: 1.0, description: 'Toque na rede, invasão ou erro de bloqueio do adversário' },
+  'opponent_error:set_error':    { enumValue: 'SET_ERROR',    label: 'Erro de levantamento',  dataVolley: 'E=', color: SCOUT_COLORS.ERROR.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.ERROR.hex], colorName: 'red',    efficiencyValue: 1.0, description: 'Dois toques, condução ou erro do levantador adversário' },
+  'opponent_error:violation':    { enumValue: 'VIOLATION',    label: 'Infração',              dataVolley: '/',  color: SCOUT_COLORS.NEGATIVE.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.NEGATIVE.hex], colorName: 'yellow', efficiencyValue: 1.0, description: 'Falta posicional, infração de rodízio ou de saque' },
+  'opponent_error:error':        { enumValue: 'ERROR',        label: 'Erro adversário',       dataVolley: '=',  color: SCOUT_COLORS.ERROR.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.ERROR.hex], colorName: 'red',    efficiencyValue: 1.0, description: 'Erro genérico do adversário (legado)' },
+
+  // PONTO ADVERSÁRIO (sub-ações tipadas)
+  'opponent_point:kill':        { enumValue: 'KILL',        label: 'Ataque deles',    dataVolley: 'A#', color: SCOUT_COLORS.NEGATIVE.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.NEGATIVE.hex], colorName: 'yellow', efficiencyValue: -1.0, description: 'Ataque adversário marcou ponto' },
+  'opponent_point:ace':         { enumValue: 'ACE',         label: 'Ace deles',       dataVolley: 'S#', color: SCOUT_COLORS.NEGATIVE.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.NEGATIVE.hex], colorName: 'yellow', efficiencyValue: -1.0, description: 'Saque adversário marcou ponto direto' },
+  'opponent_point:block_point': { enumValue: 'BLOCK_POINT', label: 'Bloqueio deles',  dataVolley: 'B#', color: SCOUT_COLORS.NEGATIVE.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.NEGATIVE.hex], colorName: 'yellow', efficiencyValue: -1.0, description: 'Bloqueio adversário marcou ponto' },
+  'opponent_point:error':       { enumValue: 'ERROR',       label: 'Ponto adversário',dataVolley: '=',  color: SCOUT_COLORS.NEGATIVE.hex, hoverColor: SCOUT_HOVER_COLORS[SCOUT_COLORS.NEGATIVE.hex], colorName: 'yellow', efficiencyValue: -1.0, description: 'Ponto adversário genérico' },
 }
 
 /**
@@ -468,12 +483,14 @@ export function getSubActionsForUI(action: string): Array<{
 }> {
   // Definição da ordem das sub-ações por fundamento (scout.ts types)
   const subActionOrder: Record<string, string[]> = {
-    serve:     ['ace', 'broken_pass', 'overpass', 'facilitated', 'error'],
-    reception: ['perfect', 'positive', 'negative', 'overpass', 'error'],
-    attack:    ['kill', 'tip', 'block_out', 'replay', 'continued', 'blocked', 'error'],
-    block:     ['kill_block', 'touch', 'error'],
-    dig:       ['perfect', 'positive', 'bad', 'error'],
-    set:       ['perfect', 'positive', 'negative', 'error'],
+    serve:          ['ace', 'broken_pass', 'overpass', 'facilitated', 'error'],
+    reception:      ['perfect', 'positive', 'negative', 'overpass', 'error'],
+    attack:         ['kill', 'tip', 'block_out', 'replay', 'continued', 'blocked', 'error'],
+    block:          ['kill_block', 'touch', 'error'],
+    dig:            ['perfect', 'positive', 'bad', 'error'],
+    set:            ['perfect', 'positive', 'negative', 'error'],
+    opponent_error: ['serve_error', 'attack_error', 'block_error', 'set_error', 'violation', 'error'],
+    opponent_point: ['kill', 'ace', 'block_point', 'error'],
   }
 
   const subs = subActionOrder[action] ?? []

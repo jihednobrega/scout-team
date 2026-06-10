@@ -377,6 +377,33 @@ async function buildPrompt(req: AIGenerateRequest): Promise<AIPrompt> {
         value: setTotal > 0 ? Math.round((count / setTotal) * 100) : 0,
       }))
 
+      // Performance individual por atleta (treinador precisa dos dados nominais)
+      const { calculatePlayerStats: tbCalcStats, calculateRatingFromStats: tbCalcRating } = await import('@/utils/stats')
+      const playerPerformance = tbPlayers
+        .map(p => {
+          const pActions = tbMatch.actions.filter(a => a.playerId === p.id)
+          if (pActions.length === 0) return null
+          const pStats = tbCalcStats(p.id, pActions.map(a => ({ ...a, player: a.playerId ?? '', set: a.setNumber })) as any, 1)
+          const pRating = tbCalcRating(pStats)
+          return {
+            name: p.name,
+            position: p.position,
+            points: pStats.points,
+            rating: pRating.friendlyRating,
+            attackKills: pStats.attack.kills,
+            attackErrors: pStats.attack.errors,
+            attackTotal: pStats.attack.total,
+            serveAces: pStats.serve.aces,
+            serveErrors: pStats.serve.errors,
+            receptionPerfect: pStats.reception.perfect,
+            receptionErrors: pStats.reception.errors,
+            receptionTotal: pStats.reception.total,
+            blockPoints: pStats.block.points,
+          }
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null)
+        .sort((a, b) => b.points - a.points)
+
       return buildTacticalBriefPrompt({
         homeTeam: tbMatch.homeTeam,
         awayTeam: tbMatch.awayTeam,
@@ -386,6 +413,7 @@ async function buildPrompt(req: AIGenerateRequest): Promise<AIPrompt> {
         attackByPosition,
         receptionByPosition,
         setterDistribution,
+        playerPerformance,
         totalActions: tbMatch.actions.length,
       })
     }

@@ -48,6 +48,24 @@ export const subActionTooltips: Record<string, Record<string, string>> = {
   },
 }
 
+/** Tooltips dos botões de resultado para erros do adversário e pontos adversários */
+export const opponentTooltips: Record<string, Record<string, string>> = {
+  opponent_error: {
+    serve_error:  'O saque do adversário foi para fora ou na rede. Ponto nosso.',
+    attack_error: 'O ataque do adversário foi para fora ou na rede. Ponto nosso.',
+    block_error:  'Toque na rede, invasão ou erro de bloqueio do adversário. Ponto nosso.',
+    set_error:    'Dois toques, condução ou erro do levantador adversário. Ponto nosso.',
+    violation:    'Falta posicional, infração de rodízio ou de saque. Ponto nosso.',
+    error:        'Erro genérico do adversário — ponto nosso.',
+  },
+  opponent_point: {
+    kill:        'Ataque adversário caiu na nossa quadra. Ponto deles.',
+    ace:         'Saque adversário direto — não conseguimos receber. Ponto deles.',
+    block_point: 'Bloqueio adversário caiu no nosso lado. Ponto deles.',
+    error:       'Ponto adversário (genérico) — use quando não identificar o tipo.',
+  },
+}
+
 /**
  * Guias explicativos por fundamento.
  * Mostrados no Popover ao clicar no ícone "?".

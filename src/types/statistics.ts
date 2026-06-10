@@ -118,18 +118,20 @@ export const ACTION_LABELS: Record<ScoutAction['action'], string> = {
   set: ACTION_NAMES.set,
   reception: ACTION_NAMES.reception,
   opponent_error: ACTION_NAMES.opponent_error,
+  opponent_point: ACTION_NAMES.opponent_point,
   substitution: ACTION_NAMES.substitution,
 }
 
 // Subações por fundamento
 export const SUB_ACTIONS: Record<ScoutAction['action'], string[]> = {
   serve: ['ace', 'broken_pass', 'overpass', 'facilitated', 'error'],
-  attack: ['kill', 'replay', 'continued', 'blocked', 'error'],
+  attack: ['kill', 'tip', 'block_out', 'replay', 'continued', 'blocked', 'error'],
   block: ['kill_block', 'touch', 'error'],
   reception: ['perfect', 'positive', 'negative', 'overpass', 'error'],
   set: ['perfect', 'positive', 'negative', 'error'],
   dig: ['perfect', 'positive', 'bad', 'error'],
-  opponent_error: [],
+  opponent_error: ['serve_error', 'attack_error', 'block_error', 'set_error', 'violation', 'error'],
+  opponent_point: ['kill', 'ace', 'block_point', 'error'],
   substitution: [],
 }
 

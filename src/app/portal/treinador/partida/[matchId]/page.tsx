@@ -417,6 +417,7 @@ export default async function TreinadorPartidaPage({
           teamId={session.teamId}
           matchId={matchId}
           label="Briefing Tático com IA"
+          readOnly
         />
 
         <AIInsightCard
@@ -424,6 +425,7 @@ export default async function TreinadorPartidaPage({
           teamId={session.teamId}
           matchId={matchId}
           accent={ACCENT}
+          readOnly
         />
       </VStack>
     </Box>

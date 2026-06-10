@@ -157,17 +157,17 @@ const RECEPTION_OFFSETS: Record<number, OffsetMap> = {
     libero:     { top: 50, right: 25 },
   },
   4: {
-    levantador: { top: 90, right: 85 },
+    levantador: { top: 90, right: 90 },
     central:    [
-      { top: 75, right: 70 },           // 1º central – rede esquerda
-      { top: 35, right: 80 },           // 2º central – fundo (onde líbero entraria)
+      { top: 75, right: 75 },           // 1º central – rede esquerda
+      { top: 80, right: 65 },           // 2º central – fundo (onde líbero entraria)
     ],
     ponteiro:   [
-      { top: 75, right: 45 },           // 1º ponteiro – fundo centro (recebe)
-      { top: 50, right: 25 },           // 2º ponteiro – fundo direita
+      { top: 45, right: 25 },           // 2º ponteiro – fundo direita
+      { top: 70, right: 40 },           // 1º ponteiro – fundo centro (recebe)
     ],
     oposto:     { top: 10, right: 15 },
-    libero:     { top: 22, right: 45 },
+    libero:     { top: 22, right: 40 },
   },
   5: {
     levantador: { top: 60, right: 85 },

@@ -11,7 +11,7 @@ import {
 import { ScoutAction, ActionType } from '@/types/scout'
 import AttackHeatmap from '@/components/statistics/AttackHeatmap'
 import ServeHeatmap from '@/components/statistics/ServeHeatmap'
-import AIInsightCard from '@/components/ai/AIInsightCard'
+import { MatchInsightButton } from '@/components/portal/MatchInsightButton'
 
 // ─── design tokens (iguais ao portal/atleta/page.tsx) ────────────────────────
 const BG       = '#080810'
@@ -269,7 +269,7 @@ export default async function PartidaDetailPage({
                   color: won ? '#22C55E' : '#F87171' }}>
                 {match.finalScore}
               </Text>
-              <Box display="inline-flex" px={2.5} py={1} borderRadius="8px"
+              <Box display="inline-flex" px={2.5} py={1} borderRadius="8px" mb={2}
                 style={{
                   background: won ? 'rgba(34,197,94,0.12)' : 'rgba(248,113,113,0.12)',
                   border: `1px solid ${won ? 'rgba(34,197,94,0.3)' : 'rgba(248,113,113,0.3)'}`,
@@ -278,6 +278,9 @@ export default async function PartidaDetailPage({
                   style={{ fontFamily: FONT_NUM, color: won ? '#4ADE80' : '#F87171' }}>
                   {won ? 'VITÓRIA' : 'DERROTA'}
                 </Text>
+              </Box>
+              <Box display="flex" justifyContent="flex-end">
+                <MatchInsightButton teamId={session.teamId} matchId={matchId} />
               </Box>
             </Box>
           </Flex>
@@ -423,18 +426,6 @@ export default async function PartidaDetailPage({
           </Box>
         )}
 
-        {/* Reflexão pós-jogo IA */}
-        {session.playerId && (
-          <Box w="full">
-            <AIInsightCard
-              type="post_game_reflection"
-              teamId={session.teamId}
-              matchId={matchId}
-              playerId={session.playerId}
-              accent="#22D3EE"
-            />
-          </Box>
-        )}
 
       </VStack>
     </Box>

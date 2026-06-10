@@ -149,3 +149,50 @@ export function useMatchDetail(matchId: string | null) {
 
   return { match, actions, loading, error }
 }
+
+/**
+ * Hook para listar partidas em andamento de um time via API
+ */
+export function useInProgressMatches(teamId: string | null) {
+  const [matches, setMatches] = useState<GameSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchMatches = useCallback(async () => {
+    if (!teamId) {
+      setMatches([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/matches?teamId=${teamId}&status=in_progress`)
+      if (!res.ok) throw new Error('Erro ao buscar partidas em andamento')
+      const data = await res.json()
+
+      const summaries: GameSummary[] = (Array.isArray(data) ? data : []).map((m: any) => ({
+        id: m.id,
+        date: new Date(m.date),
+        opponent: m.awayTeam,
+        result: m.result,
+        score: m.finalScore,
+        tournament: m.tournament || undefined,
+        location: m.location || undefined,
+        createdAt: new Date(m.createdAt),
+      }))
+
+      setMatches(summaries)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }, [teamId])
+
+  useEffect(() => {
+    fetchMatches()
+  }, [fetchMatches])
+
+  return { matches, loading, error, refetch: fetchMatches }
+}

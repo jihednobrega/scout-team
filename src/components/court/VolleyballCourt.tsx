@@ -74,6 +74,9 @@ export default function VolleyballCourt({
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null)
   const [showPlayerSelector, setShowPlayerSelector] = useState(false)
   const [showSubModal, setShowSubModal] = useState(false)
+  const [opponentPickerOpen, setOpponentPickerOpen] = useState<'error' | 'point' | null>(null)
+  const [showOpponentUndo, setShowOpponentUndo] = useState(false)
+  const opponentUndoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { teams } = useTeams()
   const toast = useToast()
   const courtRef = useRef<HTMLDivElement>(null)
@@ -308,23 +311,56 @@ export default function VolleyballCourt({
     externalActionRef.current = handleActionComplete
   }
 
-  const handleOpponentError = () => {
+  const OPPONENT_ERROR_SUBS = ['serve_error', 'attack_error', 'block_error', 'set_error', 'violation', 'error'] as const
+  const OPPONENT_POINT_SUBS = ['kill', 'ace', 'block_point', 'error'] as const
+
+  const triggerOpponentUndo = () => {
+    if (opponentUndoTimer.current) clearTimeout(opponentUndoTimer.current)
+    setShowOpponentUndo(true)
+    opponentUndoTimer.current = setTimeout(() => setShowOpponentUndo(false), 5000)
+  }
+
+  const handleOpponentError = (subAction: string = 'error') => {
     const scoutAction: ScoutAction = {
       id: `action-${Date.now()}`,
-      time: new Date().toLocaleTimeString('pt-BR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-      player: '0', // 0 representa o time/adversário
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      player: '0',
       action: 'opponent_error',
-      subAction: 'error',
+      subAction,
       zone: 0,
       coordinates: { x: 0, y: 0 },
       timestamp: new Date(),
       videoTimestamp: videoTimestamp || undefined,
     }
     onActionRegister(scoutAction)
+    setOpponentPickerOpen(null)
+    triggerOpponentUndo()
   }
+
+  const handleOpponentPoint = (subAction: string = 'error') => {
+    const scoutAction: ScoutAction = {
+      id: `action-${Date.now()}`,
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      player: '0',
+      action: 'opponent_point',
+      subAction,
+      zone: 0,
+      coordinates: { x: 0, y: 0 },
+      timestamp: new Date(),
+      videoTimestamp: videoTimestamp || undefined,
+    }
+    onActionRegister(scoutAction)
+    setOpponentPickerOpen(null)
+    triggerOpponentUndo()
+  }
+
+  const handleOpponentPickerSelect = useCallback((index: number) => {
+    if (opponentPickerOpen === 'error') {
+      handleOpponentError(OPPONENT_ERROR_SUBS[index] ?? 'error')
+    } else if (opponentPickerOpen === 'point') {
+      handleOpponentPoint(OPPONENT_POINT_SUBS[index] ?? 'error')
+    }
+  }, [opponentPickerOpen])
 
   const handleZoneClick = (e: React.MouseEvent, zone: number) => {
     if (!selectedPlayer || !pendingAction) {
@@ -460,7 +496,11 @@ export default function VolleyballCourt({
     onSelectResult: handleSelectResult,
     onClose: closePanel,
     onUndo,
-    onOpponentError: handleOpponentError,
+    onOpponentError: () => setOpponentPickerOpen(p => p === 'error' ? null : 'error'),
+    onOpponentPoint: () => setOpponentPickerOpen(p => p === 'point' ? null : 'point'),
+    opponentPickerOpen,
+    opponentPickerSize: opponentPickerOpen === 'error' ? OPPONENT_ERROR_SUBS.length : opponentPickerOpen === 'point' ? OPPONENT_POINT_SUBS.length : 0,
+    onOpponentPickerSelect: handleOpponentPickerSelect,
     onFocusTimestamp,
     enabledFundamentos: showActionPanel ? playerFilteredFundamentos : enabledFundamentos,
   })
@@ -533,46 +573,127 @@ export default function VolleyballCourt({
           flexDirection="column"
         >
           {/* Strip: Adversário */}
-          <Flex
-            align="center"
-            justify="space-between"
-            px={4}
-            py={2}
+          <Box
+            bg="rgba(251, 146, 60, 0.06)"
             borderBottomWidth="1px"
             borderBottomColor="whiteAlpha.100"
-            bg="rgba(251, 146, 60, 0.06)"
             flexShrink={0}
             borderTopRadius={{ base: 'xl', sm: '2xl' }}
           >
-            <Flex align="center" gap={2}>
-              <Box w="5px" h="5px" borderRadius="full" bg="orange.500" flexShrink={0} />
-              <Text
-                color="orange.400"
-                fontSize="xs"
-                fontWeight="bold"
-                textTransform="uppercase"
-                letterSpacing="0.12em"
-              >
-                {gameConfig?.opponentName || 'Adversário'}
-              </Text>
+            <Flex align="center" justify="space-between" px={4} py={2}>
+              <Flex align="center" gap={2}>
+                <Box w="5px" h="5px" borderRadius="full" bg="orange.500" flexShrink={0} />
+                <Text
+                  color="orange.400"
+                  fontSize="xs"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="0.12em"
+                >
+                  {gameConfig?.opponentName || 'Adversário'}
+                </Text>
+              </Flex>
+              <Flex gap={2} align="center">
+                {showOpponentUndo && onUndo && (
+                  <Button
+                    size="xs"
+                    colorScheme="yellow"
+                    variant="ghost"
+                    onClick={() => {
+                      onUndo()
+                      setShowOpponentUndo(false)
+                      if (opponentUndoTimer.current) clearTimeout(opponentUndoTimer.current)
+                    }}
+                    fontWeight="bold"
+                    px={2}
+                  >
+                    ↩ Desfazer
+                  </Button>
+                )}
+                <Button
+                  size="xs"
+                  colorScheme="red"
+                  variant={opponentPickerOpen === 'error' ? 'solid' : 'outline'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpponentPickerOpen(p => p === 'error' ? null : 'error')
+                  }}
+                  isDisabled={!gameStarted || !isLineupComplete || (rallyState.servingTeam === 'home' && rallyState.currentStep === 'serve')}
+                  data-testid="btn-opponent-error"
+                  _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
+                  fontWeight="bold"
+                  letterSpacing="0.04em"
+                >
+                  Erro Adversário
+                </Button>
+                <Button
+                  size="xs"
+                  colorScheme="orange"
+                  variant={opponentPickerOpen === 'point' ? 'solid' : 'outline'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setOpponentPickerOpen(p => p === 'point' ? null : 'point')
+                  }}
+                  isDisabled={!gameStarted || !isLineupComplete || (rallyState.servingTeam === 'home' && rallyState.currentStep === 'serve')}
+                  data-testid="btn-opponent-point"
+                  _disabled={{ opacity: 0.35, cursor: 'not-allowed' }}
+                  fontWeight="bold"
+                  letterSpacing="0.04em"
+                >
+                  Ponto Adversário
+                </Button>
+              </Flex>
             </Flex>
-            <Button
-              size="xs"
-              colorScheme="red"
-              variant="solid"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleOpponentError()
-              }}
-              isDisabled={!gameStarted || !isLineupComplete || (rallyState.servingTeam === 'home' && rallyState.currentStep === 'serve')}
-              data-testid="btn-opponent-error"
-              _disabled={{ opacity: 0.35, cursor: 'not-allowed', bg: 'gray.600' }}
-              fontWeight="bold"
-              letterSpacing="0.04em"
-            >
-              Erro Adversário
-            </Button>
-          </Flex>
+
+            {/* Picker de sub-ações */}
+            {opponentPickerOpen === 'error' && (
+              <Flex px={4} pb={2} gap={1} flexWrap="wrap">
+                {[
+                  { id: 'serve_error', label: 'Erro Saque' },
+                  { id: 'attack_error', label: 'Erro Ataque' },
+                  { id: 'block_error', label: 'Erro Bloqueio' },
+                  { id: 'set_error', label: 'Erro Levant.' },
+                  { id: 'violation', label: 'Infração' },
+                  { id: 'error', label: 'Genérico' },
+                ].map((sub, i) => (
+                  <Button
+                    key={sub.id}
+                    size="xs"
+                    colorScheme="red"
+                    variant="ghost"
+                    onClick={() => handleOpponentError(sub.id)}
+                    px={2}
+                  >
+                    <Text as="span" fontSize="9px" fontWeight="bold" color="red.300" mr={1}>{i + 1}</Text>
+                    {sub.label}
+                  </Button>
+                ))}
+              </Flex>
+            )}
+
+            {opponentPickerOpen === 'point' && (
+              <Flex px={4} pb={2} gap={1} flexWrap="wrap">
+                {[
+                  { id: 'kill', label: 'Ataque' },
+                  { id: 'ace', label: 'Ace' },
+                  { id: 'block_point', label: 'Bloqueio' },
+                  { id: 'error', label: 'Genérico' },
+                ].map((sub, i) => (
+                  <Button
+                    key={sub.id}
+                    size="xs"
+                    colorScheme="orange"
+                    variant="ghost"
+                    onClick={() => handleOpponentPoint(sub.id)}
+                    px={2}
+                  >
+                    <Text as="span" fontSize="9px" fontWeight="bold" color="orange.300" mr={1}>{i + 1}</Text>
+                    {sub.label}
+                  </Button>
+                ))}
+              </Flex>
+            )}
+          </Box>
 
           <Box
             w="full"

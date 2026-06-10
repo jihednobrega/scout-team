@@ -101,6 +101,7 @@ export async function POST(request: Request) {
           coordinateX: action.coordinateX ?? action.coordinates?.x ?? 0,
           coordinateY: action.coordinateY ?? action.coordinates?.y ?? 0,
           setNumber: action.setNumber ?? action.set ?? 1,
+          setId: action.setId || null,
           timestamp: action.timestamp ? new Date(action.timestamp) : new Date(),
           videoTimestamp: action.videoTimestamp || null,
           efficiencyValue: computeEfficiency(action.action, action.subAction),

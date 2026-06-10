@@ -240,9 +240,14 @@ export function useVolleyGame({ gameConfig }: UseVolleyGameProps) {
       else if (subAction === 'error') awayScored = true
     }
 
-    // ERRO DO ADVERSÁRIO (Genérico)
+    // ERRO DO ADVERSÁRIO → ponto nosso
     if (actionType === 'opponent_error') {
       homeScored = true
+    }
+
+    // PONTO DO ADVERSÁRIO → ponto deles
+    if (actionType === 'opponent_point') {
+      awayScored = true
     }
 
     // Atualizar estado
@@ -475,6 +480,7 @@ export function useVolleyGame({ gameConfig }: UseVolleyGameProps) {
     for (let i = rallyActions.length - 1; i >= 0; i--) {
       const a = rallyActions[i]
       if (a.action === 'opponent_error') return 'home'
+      if (a.action === 'opponent_point') return 'away'
       if (a.action === 'attack') {
         if (TERMINAL_HOME_POINT.has(a.subAction)) return 'home'
         if (TERMINAL_AWAY_POINT_ATTACK.has(a.subAction)) return 'away'
@@ -576,9 +582,18 @@ export function useVolleyGame({ gameConfig }: UseVolleyGameProps) {
     // Remover o ponto do histórico
     const newHistory = history.filter(p => p.id !== pointId)
 
-    // Recalcular do ponto removido em diante
-    const { baseScore, baseRotation, baseServingTeam } = getBaseStateBeforeIndex(newHistory, pointIndex, point.set)
-    const result = recalculateFromIndex(newHistory, pointIndex, baseScore, baseRotation, baseServingTeam)
+    // Estado pré-ponto: usar valores gravados no primeiro action do rally como fonte de verdade.
+    // Rotation e servingTeam são armazenados em cada ScoutAction no momento do registro,
+    // quando o estado do hook era definitivamente correto. Isso evita erros de recompute
+    // por sequências de winners com rastreamento incorreto de serving team.
+    const firstAction = point.actions[0]
+    const preRotation: number = firstAction?.rotation ?? getBaseStateBeforeIndex(newHistory, pointIndex, point.set).baseRotation
+    const preServingTeam: ServingTeam = (firstAction?.servingTeam ?? getBaseStateBeforeIndex(newHistory, pointIndex, point.set).baseServingTeam) as ServingTeam
+    // Placar pré-ponto = placar registrado no ponto imediatamente anterior (ou 0-0 se for o primeiro)
+    const prevPoint = pointIndex > 0 ? newHistory[pointIndex - 1] : null
+    const preScore = prevPoint ? { ...prevPoint.score } : { home: 0, away: 0 }
+
+    const result = recalculateFromIndex(newHistory, pointIndex, preScore, preRotation, preServingTeam)
 
     setHistory(result.history)
     setActions(newActions)
@@ -627,8 +642,13 @@ export function useVolleyGame({ gameConfig }: UseVolleyGameProps) {
     newHistory[pointIndex] = { ...point, actions: updatedPointActions }
 
     // Recalcular vencedor e placares a partir deste ponto
-    const { baseScore, baseRotation, baseServingTeam } = getBaseStateBeforeIndex(newHistory, pointIndex, point.set)
-    const result = recalculateFromIndex(newHistory, pointIndex, baseScore, baseRotation, baseServingTeam)
+    // Mesmo princípio: usar primeiro action do ponto como fonte de verdade para rotation/servingTeam
+    const firstActionEdit = point.actions[0]
+    const preRotationEdit: number = firstActionEdit?.rotation ?? getBaseStateBeforeIndex(newHistory, pointIndex, point.set).baseRotation
+    const preServingTeamEdit: ServingTeam = (firstActionEdit?.servingTeam ?? getBaseStateBeforeIndex(newHistory, pointIndex, point.set).baseServingTeam) as ServingTeam
+    const prevPointEdit = pointIndex > 0 ? newHistory[pointIndex - 1] : null
+    const preScoreEdit = prevPointEdit ? { ...prevPointEdit.score } : { home: 0, away: 0 }
+    const result = recalculateFromIndex(newHistory, pointIndex, preScoreEdit, preRotationEdit, preServingTeamEdit)
 
     setHistory(result.history)
     setActions(newActions)
@@ -662,6 +682,21 @@ export function useVolleyGame({ gameConfig }: UseVolleyGameProps) {
     setUndoStack([])
   }
 
+  // Resetar estado para iniciar um novo set (limpa ações, histórico e undo stack)
+  // Score e currentSet são gerenciados externamente em game/page.tsx
+  const resetForNewSet = () => {
+    setActions([])
+    setHistory([])
+    setUndoStack([])
+    setCurrentRallyId(`rally-${Date.now()}`)
+    setRallyState(prev => ({
+      ...prev,
+      currentStep: 'serve',
+      rallyActions: [],
+    }))
+    setLastRegisteredAction(null)
+  }
+
   return {
     score,
     setScore,
@@ -691,5 +726,6 @@ export function useVolleyGame({ gameConfig }: UseVolleyGameProps) {
     lastRegisteredAction,
     canUndo: undoStack.length > 0,
     restoreSession,
+    resetForNewSet,
   }
 }

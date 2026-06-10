@@ -5,7 +5,7 @@ import { IoPersonOutline } from 'react-icons/io5'
 import { getPortalSession } from '@/lib/portal-session'
 import { prisma } from '@/lib/prisma'
 import { LogoutButton } from '@/components/portal/LogoutButton'
-import AIInsightCard from '@/components/ai/AIInsightCard'
+import { AthleteInsightButton } from '@/components/portal/AthleteInsightButton'
 import { PlayerRadarChart } from '@/components/portal/PlayerRadarChart'
 import {
   calculatePlayerStats, calculateRatingFromStats,
@@ -362,7 +362,7 @@ export default async function AtletaPortalPage() {
               {/* Position badge */}
               <Box
                 display="inline-flex" alignItems="center"
-                px={2} py={0.5} mb={4} borderRadius="6px"
+                px={2} py={0.5} mb={3} borderRadius="6px"
                 style={{
                   background: `rgba(34,211,238,0.1)`,
                   border: `1px solid rgba(34,211,238,0.25)`,
@@ -376,6 +376,13 @@ export default async function AtletaPortalPage() {
                   {POSITION_LABELS[player?.position ?? ''] ?? player?.position ?? '—'}
                 </Text>
               </Box>
+
+              {/* Botão de insights */}
+              {session.playerId && (
+                <Box display="block" mt={2}>
+                  <AthleteInsightButton teamId={session.teamId} playerId={session.playerId} />
+                </Box>
+              )}
 
             </Box>
           </Flex>
@@ -629,18 +636,6 @@ export default async function AtletaPortalPage() {
             style={{ background: CARD_BG, border: `1px solid ${CARD_BR}` }}>
             {matches.map((m) => <MatchRow key={m.id} match={m} />)}
           </Box>
-        </Box>
-      )}
-
-      {/* Insight IA — feedback do atleta */}
-      {session.playerId && (
-        <Box mt={6}>
-          <AIInsightCard
-            type="athlete_insight"
-            teamId={session.teamId}
-            playerId={session.playerId}
-            accent={ACCENT}
-          />
         </Box>
       )}
 

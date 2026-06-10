@@ -17,7 +17,8 @@ const menuItems = [
   { icon: '/icons/history.svg',    label: 'Jogos',        href: '/history',   requiresTeam: true  },
   { icon: '/icons/statistics.svg', label: 'Estatísticas', href: '/statistics',requiresTeam: true  },
   { icon: '/icons/reports.svg',    label: 'Relatórios',   href: '/reports',   requiresTeam: true  },
-  { icon: '/icons/settings.svg',   label: 'Configurações',href: '/settings',  requiresTeam: false },
+  { icon: '/icons/settings.svg',   label: 'Configurações', href: '/settings',         requiresTeam: false },
+  { icon: '/icons/logo.svg',       label: 'Portal',        href: '/preview',          requiresTeam: false },
 ]
 
 export default function MenuDrawer({ isOpen, onClose }: MenuDrawerProps) {

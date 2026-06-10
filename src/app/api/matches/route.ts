@@ -63,6 +63,10 @@ export async function POST(request: Request) {
       stats,
       duration,
       actions,
+      lineup,
+      liberoId,
+      enabledFundamentos,
+      matchFormat,
     } = body
 
     // Validações
@@ -106,6 +110,10 @@ export async function POST(request: Request) {
           stats: stats ? JSON.stringify(stats) : null,
           duration: duration || null,
           status: body.status || 'in_progress',
+          lineup: lineup ? JSON.stringify(lineup) : null,
+          liberoId: liberoId || null,
+          enabledFundamentos: enabledFundamentos ? JSON.stringify(enabledFundamentos) : null,
+          matchFormat: matchFormat ? String(matchFormat) : null,
         },
       })
 

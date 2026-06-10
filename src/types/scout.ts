@@ -1,5 +1,8 @@
 // app/types/scout.ts
-export type ActionType = 'serve' | 'reception' | 'set' | 'attack' | 'block' | 'dig' | 'opponent_error' | 'substitution'
+export type ActionType = 'serve' | 'reception' | 'set' | 'attack' | 'block' | 'dig' | 'opponent_error' | 'opponent_point' | 'substitution'
+
+export type OpponentErrorSubAction = 'serve_error' | 'attack_error' | 'block_error' | 'set_error' | 'violation' | 'error'
+export type OpponentPointSubAction = 'kill' | 'ace' | 'block_point' | 'error' // 'error' = genérico (nosso erro não tipado)
 
 export type ServeSubAction = 'ace' | 'broken_pass' | 'overpass' | 'facilitated' | 'error'
 export type ServeType = 'float' | 'jump' | 'directed'
